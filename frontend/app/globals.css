@@ -1,0 +1,114 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─────────────────────────────────────────────────────────────
+   SmartPark AI 2.0 — Global CSS
+   Design tokens as CSS custom properties (mirrors tailwind.config)
+───────────────────────────────────────────────────────────── */
+
+:root {
+  --color-bg: #0A0C0E;
+  --color-surface: #111519;
+  --color-elevated: #181D21;
+  --color-border: #282F34;
+  --color-text-primary: #F4F6F1;
+  --color-text-secondary: #8B9298;
+  --color-signature: #B7F34A;
+  --color-available: #10B981;
+  --color-limited: #F59E0B;
+  --color-occupied: #EF4444;
+  --color-ai: #3B82F6;
+}
+
+/* ─── Base resets & scrollbar ─────────────────────────────── */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    min-height: 100dvh;
+  }
+
+  /* Custom scrollbar — dark, minimal */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-bg);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-secondary);
+  }
+
+  /* Focus-visible only for keyboard navigation */
+  :focus {
+    outline: none;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-signature);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Selection */
+  ::selection {
+    background-color: var(--color-signature);
+    color: var(--color-bg);
+  }
+}
+
+/* ─── Utility classes ─────────────────────────────────────── */
+@layer utilities {
+  /* Dot grid background used in design-system showcase banner */
+  .spatial-grid-dots {
+    background-image: radial-gradient(
+      circle,
+      rgba(40, 47, 52, 0.9) 1px,
+      transparent 1px
+    );
+    background-size: 22px 22px;
+  }
+
+  /* Line grid background — alternate spatial pattern */
+  .spatial-grid-lines {
+    background-image:
+      linear-gradient(rgba(40, 47, 52, 0.35) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(40, 47, 52, 0.35) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  /* Alias used in 3D showcase section */
+  .spatial-grid {
+    background-image: radial-gradient(
+      circle,
+      rgba(40, 47, 52, 0.8) 1px,
+      transparent 1px
+    );
+    background-size: 20px 20px;
+  }
+
+  /* Glass surface overlay */
+  .glass-surface {
+    background: rgba(17, 21, 25, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+}
