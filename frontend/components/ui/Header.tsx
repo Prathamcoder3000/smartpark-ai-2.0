@@ -80,9 +80,16 @@ export const Header: React.FC = () => {
             </Link>
 
             {/* Search Trigger */}
-            <IconButton variant="ghost" size="sm" className="h-8 w-8" aria-label="Search places">
-              <Search className="h-3.5 w-3.5 text-smartTextSecondary" />
-            </IconButton>
+            <Link href="/search">
+              <IconButton
+                variant="ghost"
+                size="sm"
+                className={`h-8 w-8 ${pathname === '/search' ? 'bg-smartSurface border border-smartBorder text-signature' : ''}`}
+                aria-label="Search places"
+              >
+                <Search className={`h-3.5 w-3.5 ${pathname === '/search' ? 'text-signature' : 'text-smartTextSecondary'}`} />
+              </IconButton>
+            </Link>
 
             {/* Notifications Trigger */}
             <div className="relative">
