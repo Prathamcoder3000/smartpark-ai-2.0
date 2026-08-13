@@ -1,1390 +1,244 @@
 # 🚗 SmartPark AI 2.0
 
-> **Predictive parking intelligence for smarter urban mobility.**
+> **Don't just find parking. Know where you should park before you arrive.**
 
-SmartPark AI 2.0 is an AI-powered smart parking and urban mobility platform being developed to make parking **predictive, intelligent, spatial, and decision-oriented**.
+SmartPark AI 2.0 is an intelligent parking and urban mobility platform designed to help drivers discover, evaluate, and reserve optimal parking spaces using spatial information, predictive intelligence, and personalized preferences.
 
-Traditional parking systems primarily answer:
-
-> **"Where can I park?"**
-
-SmartPark AI 2.0 is designed to answer a more useful question:
-
-> **"Where should I park when I arrive?"**
-
-The platform combines:
-
-**Smart Parking + Spatial Visualization + Predictive Intelligence + Recommendations + Operations Analytics**
-
-to create a connected parking experience for both **drivers** and **parking operators**.
+Finding parking in modern cities is not just a distance query—it is a temporal, economic, and convenience trade-off. Traditional parking locators only show static "current availability," which often changes by the time a driver arrives. SmartPark AI 2.0 solves this by presenting live predictive occupancy forecasts, walking ETAs, EV charging availability, and tailored AI recommendations.
 
 ---
 
-# 🧭 Table of Contents
+## 📌 Project Status
 
-- [Overview](#-overview)
-- [Problem](#-problem)
-- [Vision](#-vision)
-- [Core Concept](#-core-concept)
-- [Current Development Status](#-current-development-status)
-- [Current Pages](#-current-pages)
-- [Driver Experience](#-driver-experience)
-- [Operator Experience](#-operator-experience)
-- [SmartPark Intelligence](#-smartpark-intelligence)
-- [Design System](#-design-system)
-- [Color System](#-color-system)
-- [Typography](#-typography)
-- [UI Component System](#-ui-component-system)
-- [Design Laboratory](#-design-laboratory)
-- [Technology Stack](#-technology-stack)
-- [Architecture](#-architecture)
-- [Project Structure](#-project-structure)
-- [Getting Started](#-getting-started)
-- [Clone the Repository](#-clone-the-repository)
-- [Frontend Setup](#-frontend-setup)
-- [Backend Setup](#-backend-setup)
-- [AI Engine Setup](#-ai-engine-setup)
-- [Database](#-database)
-- [Environment Configuration](#-environment-configuration)
-- [Available Services](#-available-services)
-- [Verification](#-verification)
-- [Development Roadmap](#-development-roadmap)
-- [Future Scope](#-future-scope)
-- [Development Principles](#-development-principles)
-- [Product Direction](#-product-direction)
-- [Project Purpose](#-project-purpose)
-- [Current Project Status](#-current-project-status)
-- [Developer](#-developer)
-- [License](#-license)
+The platform consists of a modern Next.js frontend, a Fastify-based backend with Prisma, and a FastAPI-based AI engine. The current implementation status across components is outlined below:
+
+| Area / Component | Current Implementation | Status |
+| :--- | :--- | :--- |
+| **Frontend Framework** | Next.js 14 (App Router) + TypeScript + Tailwind CSS | ✅ Complete |
+| **Overview Page (`/`)** | Live statistics dashboard, recent bookings summary, and analytics | ✅ Complete |
+| **Live Map (`/map`)** | Interactive 2D floor visualizer, live slot picker, and selector panel | ✅ Complete |
+| **Search Page (`/search`)** | Search console, auto-complete suggestions, filters, and sorting | ✅ Complete |
+| **Profile Page (`/profile`)** | User settings, saved facilities, preferences, and mock actions | ✅ Complete |
+| **Design Lab (`/design-system`)** | Interactive system tokens, style controls, and components preview | ✅ Complete |
+| **Authentication UI** | Animated, responsive `/login` and `/signup` screens | 🟡 Frontend Prototype |
+| **Backend API (`backend/`)** | Fastify service foundation on Port 8001 with CORS configuration | 🟡 Server Foundation |
+| **Database Schema** | Prisma ORM with PostgreSQL provider mapping `ParkingFacility` | 🟡 Database Schema |
+| **AI Engine (`ai-engine/`)** | FastAPI service on Port 8000 returning service health feeds | 🟡 Engine Foundation |
+| **API / Services Integration** | Frontend calls are fully client-side using mock data modules | 📋 Planned Integration |
 
 ---
 
-# 🧭 Overview
+## 🎯 Product Vision
 
-Finding parking is more than a simple search problem.
+SmartPark AI 2.0 bridges the gap between drivers and parking infrastructure by optimizing parking occupancy:
 
-A driver may need to understand:
+### 👤 Driver Experience
+- **Smart Search & Recommendations**: Enter a destination and instantly receive recommendations ranked by distance, cost, covered options, and EV charger availability.
+- **Predictive Booking**: Know the forecasted occupancy of a garage hours in advance.
+- **Interactive Spatial Mapping**: Drill down into specific garage levels, view individual slot attributes (EV, Disabled, Standard), and pre-select a bay.
+- **Personalized Profile Preferences**: Configure custom weights (e.g., prioritize short walking distance over cost or flag EV charging as mandatory) that directly re-rank search recommendations.
 
-- 🅿️ Is parking currently available?
-- 📍 Where is the best nearby parking facility?
-- 🚶 How far will I need to walk?
-- 💰 What does parking cost?
-- 📈 Will the parking situation change before I arrive?
-- 🤖 Which parking option provides the best overall choice?
-
-SmartPark AI 2.0 is being designed around these questions.
-
-The long-term platform combines real-time parking information, spatial parking visualization, predictive intelligence, recommendation systems, and operational analytics.
+### 🏢 Operator Experience (Planned)
+- **Occupancy Optimization**: Balance vehicle volume across multi-level structures.
+- **Dynamic Pricing Controls**: Automatically adjust rates during peak demand hours.
+- **Predictive Demand Forecasting**: Review historical peak data to optimize staffing and energy usage.
 
 ---
 
-# ❗ Problem
+## ✨ Current Capabilities
 
-Conventional parking discovery often focuses on **current availability** or **distance**.
+### 📊 Overview Dashboard (`/`)
+- Displays real-time KPIs (Active Reservations, Total Hours Logged, Average Cost, Active Vehicles).
+- Renders occupancy charts and active reservations.
+- Direct links to key pages (Live Map, Design Lab).
 
-However, current availability does not necessarily mean availability when the driver arrives.
+### 🗺️ Interactive Live Map (`/map`)
+- Allows users to select active facilities in the city.
+- Displays interactive multi-floor layouts (e.g., Level B1, B2).
+- Dynamic slot grid visualizer: select standard, disabled, or EV-ready bays.
+- Interactive booking panel showing ETA, bay numbers, and billing summary.
 
-For example:
+### 🔍 Parking Search Console (`/search`)
+- Destination search with popular quick-select destination chips (e.g., Cyber City, Central Metro, TechPark).
+- Auto-complete suggestions categorized by *Parking Facilities*, *Nearby Destinations*, and *Parking Zones*.
+- Top Highlighted **SmartPark Recommended** option displaying AI recommendation reasons and confidence score (e.g., 98.4%).
+- Multi-criteria filters: Availability (High Availability), Features (EV Ready, Covered, 24/7 Security), and maximum Price limits.
+- Result sorting by Recommended, Closest, Lowest Price, and Highest Availability.
+- Detailed modal overview displaying facilities, rates, and amenities.
 
-```text
-Current Situation
+### 👤 Profile Center (`/profile`)
+- User summary Hero Card with "Pro Operator" status and active status badges.
+- Edit profile form modal with client-side validation and Toast notification updates.
+- Interactive preferences panel to toggle EV, Covered, Low Price, and Shorter Walk settings.
+- Saved Parking List allowing users to remove items with empty state visual fallbacks.
+- Mock Account Security modals (Change Password, Privacy Policy, Terms of Service, and Logout Confirmation).
 
-Parking A
-90% available
-5 minutes away
+---
 
-Parking B
-65% available
-8 minutes away
+## 🖥️ Application Routes
+
+| Route | Purpose | Current State |
+| :--- | :--- | :--- |
+| `/` | System Overview, Booking Summary, and Main Dashboard | ✅ Completed (Mock Data) |
+| `/design-system` | Developer Design Laboratory & component style preview | ✅ Completed (Interactive) |
+| `/map` | Live Map, multi-level layouts, slot selector, and booking summary | ✅ Completed (Mock Data) |
+| `/login` | Secure operator login screen with animated flow | 🟡 Frontend Prototype |
+| `/signup` | Operator account signup screen with validation | 🟡 Frontend Prototype |
+| `/profile` | Manage account data, parking preferences, and saved garages | 🟡 Frontend Prototype |
+| `/search` | Search dashboard with auto-complete suggestions and filters | 🟡 Frontend Prototype |
+
+---
+
+## 🧠 SmartPark Intelligence
+
+The user experience simulates predictive analytics to guide drivers:
+
+- **AI Recommendation Confidence**: Calculations displaying matching confidence (e.g., `98.4%`) based on user profile settings.
+- **Occupancy Alerts & Forecasts**: Real-time status indicators (`AVAILABLE`, `LIMITED`, `OCCUPIED`) paired with text forecasts (e.g., *"High stability next 3 hrs"*).
+- **Recommendation Reasoning**: Explanatory tags indicating why a spot was chosen (e.g., *Short walking distance*, *Covered Deck*).
+
+### 🔍 Current Integration State
+Currently, all predictions, recommendation rationale, and confidence scores are generated using client-side mock data engines ([`frontend/lib/liveMapData.ts`](frontend/lib/liveMapData.ts) & [`frontend/lib/searchData.ts`](frontend/lib/searchData.ts)). Connecting the Next.js frontend to the Fastify gateway and FastAPI python forecasting models is planned.
+
+---
+
+## 🎨 Design System
+
+SmartPark AI 2.0 utilizes a spatial dark-mode visual system designed to reduce driver eye strain.
+
+### 🎨 Color Palette
+Tailwind CSS tokens implemented in [`frontend/tailwind.config.ts`](frontend/tailwind.config.ts):
+
+| Token Name | Hex Code | Purpose / Usage |
+| :--- | :--- | :--- |
+| `smartBg` | `#0A0C0E` | Deep background dark canvas |
+| `smartSurface` | `#111519` | Main layout card surfaces |
+| `smartElevated` | `#181D21` | Popups, modals, and hover card surfaces |
+| `smartBorder` | `#282F34` | Sleek borders separating sections |
+| `smartTextPrimary` | `#F4F6F1` | Primary text and major headers |
+| `smartTextSecondary`| `#8B9298` | Secondary labels, descriptions, and details |
+| `signature` | `#B7F34A` | Electric Lime accent for active selection and highlights |
+| `available` | `#10B981` | Green status for open bays and available facilities |
+| `limited` | `#F59E0B` | Amber status for low bay availability |
+| `occupied` | `#EF4444` | Red status indicating occupied slots or closed facilities |
+| `aiBlue` | `#3B82F6` | Electric Blue representing AI recommendations |
+
+### 🔤 Typography & Font System
+- **Space Grotesk**: Utilized for primary headers, logos, and dashboard metrics.
+- **Inter**: Utilized for standard body copy, input forms, and descriptive labels.
+- **JetBrains Mono**: Utilized for status codes, booking reference IDs, and technical metrics.
+
+---
+
+## 🧩 Component Library
+
+Located in [`frontend/components/ui/`](frontend/components/ui/):
+
+| Component | Description |
+| :--- | :--- |
+| **`Header.tsx`** | Floating navigation capsule header with responsive mobile drawer and profile routing |
+| **`Button.tsx`** | System-styled buttons supporting `primary`, `secondary`, and `ghost` variants |
+| **`IconButton.tsx`**| Circular icon buttons for search, alerts, and navigation |
+| **`Card.tsx`** | Standard containers with varying surface elevations (`default`, `elevated`, `outlined`, `flat`) |
+| **`Badge.tsx`** | Small tags supporting semantic status color states |
+| **`StatusBadge.tsx`**| Animated indicator tag for facility and slot availability |
+| **`Input.tsx`** | Standard text inputs with label matching, placeholders, and error validation displays |
+| **`Select.tsx`** | Custom styled native selection dropdown selector |
+| **`Modal.tsx`** | Overlay dialog supporting custom widths, sizes, and keyboard Escape close |
+| **`Drawer.tsx`** | Sliding overlay drawer for side menus and layout panels |
+| **`Toast.tsx`** | Success, warning, info, and error notifications popping up at screen corners |
+| **`EmptyState.tsx`**| Clean dashed placeholder panel displayed when result arrays are empty |
+| **`LoadingSkeleton.tsx`**| Animated pulse skeletons matching mock load routines |
+| **`ParkingSlot.tsx`**| Interactive map grid node managing availability and EV charging badge statuses |
+
+---
+
+## 🏗️ Architecture
+
+SmartPark AI 2.0 is designed as a decoupled microservices architecture:
+
+```mermaid
+flowchart TD
+    User([Driver / Operator]) <-->|React / Next.js| Frontend[Next.js App Server :3000]
+    Frontend <-->|REST API / Planned| Backend[Fastify API Gateway :8001]
+    Backend <-->|Prisma Client| DB[(PostgreSQL Database)]
+    Backend <-->|REST API / Planned| AIEngine[FastAPI Python Engine :8000]
 ```
 
-A simple parking application may recommend Parking A because it is closer and currently has more availability.
-
-But if demand is rapidly increasing:
+### 📂 Directory Structure
 
 ```text
-Parking A
-90% available now
-        ↓
-High incoming demand
-        ↓
-Low availability at arrival
-```
-
-then Parking B may actually be the better decision.
-
-SmartPark aims to move from:
-
-```text
-Current Availability
-        ↓
-Simple Search
-        ↓
-Nearest Parking
-```
-
-toward:
-
-```text
-Current Data
-     +
-Historical Patterns
-     +
-Demand Signals
-     +
-Prediction
-     +
-Distance
-     +
-Price
-        ↓
-Intelligent Recommendation
-```
-
----
-
-# 🎯 Vision
-
-The long-term vision of SmartPark AI 2.0 is to create a parking intelligence platform that helps people make better parking decisions before they arrive.
-
-### Instead of:
-
-> "Show me parking."
-
-### SmartPark aims to provide:
-
-> "Here are the parking options, this is what is likely to happen, and this is the option we recommend."
-
-The platform is designed around:
-
-- **Spatial awareness**
-- **Prediction**
-- **Decision support**
-- **Real-time information**
-- **User convenience**
-- **Parking operations intelligence**
-
----
-
-# 🧠 Core Concept
-
-SmartPark AI 2.0 is built around four major concepts.
-
-```text
-                    SMARTPARK AI 2.0
-
-                           │
-           ┌───────────────┼───────────────┐
-           │               │               │
-           ▼               ▼               ▼
-       SPATIAL         INTELLIGENCE    OPERATIONS
-       PARKING         & PREDICTION    ANALYTICS
-           │               │               │
-           └───────────────┼───────────────┘
-                           │
-                           ▼
-                    SMART DECISIONS
-```
-
-### 01 — Spatial Parking
-Represent parking facilities, floors, corridors, bays, and spaces visually.
-
-### 02 — Predictive Intelligence
-Estimate future occupancy and demand rather than relying only on current conditions.
-
-### 03 — Recommendations
-Evaluate multiple parking options and recommend a suitable choice.
-
-### 04 — Operations Analytics
-Provide parking operators with insights into occupancy, utilization, demand, and trends.
-
----
-
-# ✨ Current Development Status
-
-## 📅 Milestone — August 9, 2026
-
-The **initial technical foundation and premium UI/design system** have been completed.
-
-The project is currently in the **product interface development stage**.
-
----
-
-## ✅ Completed
-
-### Project Foundation
-
-- [x] New SmartPark AI 2.0 architecture
-- [x] Monorepo-style project structure
-- [x] Next.js frontend foundation
-- [x] React + TypeScript
-- [x] Tailwind CSS
-- [x] Fastify backend foundation
-- [x] FastAPI AI-engine foundation
-- [x] Prisma database foundation
-- [x] Environment configuration structure
-- [x] Backend health endpoint
-- [x] AI-engine health endpoint
-- [x] Git repository initialization
-- [x] GitHub repository setup
-
-### Premium UI Foundation
-
-- [x] SmartPark visual identity
-- [x] Premium dark interface
-- [x] Spatial grid visual language
-- [x] Typography system
-- [x] SmartPark color tokens
-- [x] Responsive foundation
-- [x] Custom focus states
-- [x] Custom scrollbar styling
-- [x] Motion foundation
-
-### Reusable Components
-
-- [x] Button
-- [x] IconButton
-- [x] Input
-- [x] SearchInput
-- [x] Select
-- [x] Badge
-- [x] StatusBadge
-- [x] Card
-- [x] Metric
-- [x] MetricCard
-- [x] AIInsight
-- [x] ParkingSlot
-- [x] Tabs
-- [x] Modal
-- [x] Drawer
-- [x] Tooltip
-- [x] Header
-- [x] LoadingSkeleton
-- [x] EmptyState
-- [x] ErrorState
-- [x] Toast
-
-### Parking Interface Foundation
-
-- [x] Parking bay visualization
-- [x] Available parking state
-- [x] Limited parking state
-- [x] Occupied parking state
-- [x] Reserved parking state
-- [x] Selected parking state
-- [x] Vehicle visualization
-- [x] Parking metrics
-- [x] SmartPark Intelligence UI
-- [x] Recommendation visualization
-
-### Navigation Foundation
-
-- [x] Floating capsule navigation
-- [x] Overview navigation
-- [x] Live Map navigation placeholder
-- [x] Intelligence navigation placeholder
-- [x] Bookings navigation placeholder
-- [x] Pricing navigation placeholder
-- [x] Search control
-- [x] Notification control
-- [x] Profile control
-- [x] Mobile navigation foundation
-
-### Verification
-
-- [x] Production frontend build verification
-- [x] TypeScript compilation
-- [x] Next.js build verification
-- [x] Runtime verification
-- [x] Responsive UI verification
-- [x] Interactive component verification
-- [x] Design-system showcase verification
-
----
-
-# 🖥️ Current Pages
-
-| Page              | Route            | Current Status           |
-| ----------------- | ---------------- | ------------------------ |
-| Overview          | `/`              | 🟢 Built / being refined |
-| Design Laboratory | `/design-system` | 🟢 Complete              |
-| Live Map          | `/map`           | 🟡 Navigation planned    |
-| Intelligence      | `/intelligence`  | 🟡 Navigation planned    |
-| Bookings          | `/bookings`      | 🟡 Navigation planned    |
-| Pricing           | `/pricing`       | 🟡 Navigation planned    |
-| Login             | `/login`         | ⚪ Planned                |
-| Sign Up           | `/signup`        | ⚪ Planned                |
-| Profile           | `/profile`       | ⚪ Planned                |
-
-> The navigation structure has been established ahead of the corresponding product pages so the complete product architecture is visible early.
-
----
-
-# 👤 Driver Experience
-
-The driver-facing experience is intended to follow a complete parking journey.
-
-```text
-DISCOVER
-   ↓
-SEARCH
-   ↓
-COMPARE
-   ↓
-PREDICT
-   ↓
-SELECT
-   ↓
-RESERVE
-   ↓
-NAVIGATE
-   ↓
-PARK
-```
-
-## Driver Features
-
-Planned driver capabilities include:
-
-- Nearby parking discovery
-- Parking facility comparison
-- Current availability
-- Predicted availability
-- Parking demand information
-- Walking distance
-- Estimated cost
-- Intelligent recommendations
-- Floor selection
-- Parking slot selection
-- Parking reservation
-- Booking confirmation
-- Digital parking pass
-- Booking history
-- Saved parking
-- Notifications
-
----
-
-# 🏢 Operator Experience
-
-SmartPark is also designed to provide a dedicated operational experience for parking providers.
-
-## Operator Capabilities
-
-Planned functionality includes:
-
-- Occupancy monitoring
-- Facility utilization
-- Demand forecasting
-- Peak-period identification
-- Historical parking trends
-- Parking analytics
-- Operational recommendations
-- Pricing insights
-- Parking-space management
-
-### Operator Intelligence Flow
-
-```text
-Parking Data
-     ↓
-Data Processing
-     ↓
-Occupancy Analysis
-     ↓
-Demand Forecasting
-     ↓
-Operational Insights
-     ↓
-Better Parking Management
-```
-
----
-
-# 🤖 SmartPark Intelligence
-
-The intelligence layer is one of the core concepts of SmartPark.
-
-It is designed to eventually transform raw parking information into useful decisions.
-
----
-
-## 01 — Occupancy Prediction
-
-The system is designed to predict future occupancy using historical and contextual signals.
-
-Conceptual flow:
-
-```text
-Current Occupancy
-        ↓
-Historical Patterns
-        ↓
-Time / Day
-        ↓
-Demand Signals
-        ↓
-Predicted Occupancy
-```
-
-Potential inputs may include:
-
-- Current occupancy
-- Historical occupancy
-- Time of day
-- Day of week
-- Parking facility
-- Demand patterns
-- Other contextual signals
-
----
-
-## 02 — Parking Recommendation
-
-SmartPark aims to evaluate parking options using multiple factors instead of simply selecting the closest facility.
-
-Potential recommendation factors:
-
-```text
-Availability
-     +
-Predicted Availability
-     +
-Distance
-     +
-Walking Time
-     +
-Price
-     +
-Demand
-     +
-User Preferences
-     ↓
-Recommendation Score
-     ↓
-Recommended Parking
-```
-
-Example prototype:
-
-```text
-SMARTPARK INTELLIGENCE
-
-BEST OPTION
-
-Central Plaza
-
-92% availability confidence
-8 min walking distance
-₹30/hr
-
-WHY THIS SPOT
-
-✓ High predicted availability
-✓ Lower expected congestion
-✓ Short walking distance
-✓ Stable pricing
-```
-
-> The above values are prototype/demo values and do not represent live production predictions.
-
----
-
-## 03 — Demand Intelligence
-
-SmartPark is designed to understand changes in parking demand.
-
-Conceptually:
-
-```text
-Low Demand
-     ↓
-Normal Demand
-     ↓
-High Demand
-     ↓
-Peak Demand
-```
-
-This can support:
-
-- Driver recommendations
-- Operator planning
-- Demand forecasting
-- Capacity management
-- Pricing intelligence
-
----
-
-## 04 — Intelligent Parking Selection
-
-The long-term objective is to help users choose a parking space based on more than a single metric.
-
-For example:
-
-```text
-Parking A
-────────────
-Closer
-Higher price
-Increasing demand
-
-Parking B
-────────────
-Slightly farther
-Lower price
-Stable availability
-
-             ↓
-
-SmartPark Intelligence
-             ↓
-
-Recommended Option
-```
-
----
-
-# 🎨 Design System
-
-SmartPark AI 2.0 uses a **premium dark spatial interface** designed around mobility infrastructure, technical systems, and intelligent decision-making.
-
-The interface is intentionally:
-
-- Minimal
-- Technical
-- Spatial
-- Data-driven
-- Premium
-- Responsive
-- Accessible
-- Functional
-
----
-
-# 🎨 Color System
-
-| Token          | Value     | Purpose                     |
-| -------------- | --------- | ---------------------------- |
-| Background     | `#0A0C0E` | Deep application background |
-| Surface        | `#111519` | Standard surface            |
-| Elevated       | `#181D21` | Raised surface              |
-| Border         | `#282F34` | Structural border            |
-| Primary Text   | `#F4F6F1` | Main text                   |
-| Secondary Text | `#8B9298` | Supporting text              |
-| Signature      | `#B7F34A` | SmartPark Electric Lime      |
-| Available      | `#10B981` | Available parking            |
-| Limited        | `#F59E0B` | Limited parking              |
-| Occupied       | `#EF4444` | Occupied parking             |
-| AI             | `#3B82F6` | AI intelligence               |
-
----
-
-# 🔤 Typography
-
-SmartPark uses three primary typefaces.
-
-### Space Grotesk
-Used for:
-- Large headings
-- Product titles
-- Display typography
-- Visual hierarchy
-
-### Inter
-Used for:
-- Navigation
-- Body text
-- Buttons
-- Forms
-- General interface text
-
-### JetBrains Mono
-Used for:
-- Metrics
-- Telemetry
-- Technical information
-- Numerical data
-- System-style information
-
----
-
-# 🧩 UI Component System
-
-The reusable component library lives inside:
-
-```text
-frontend/components/ui/
-```
-
-Current components include:
-
-```text
-AIInsight.tsx
-Badge.tsx
-Button.tsx
-Card.tsx
-Drawer.tsx
-EmptyState.tsx
-ErrorState.tsx
-Header.tsx
-IconButton.tsx
-Input.tsx
-LoadingSkeleton.tsx
-Metric.tsx
-MetricCard.tsx
-Modal.tsx
-ParkingSlot.tsx
-SearchInput.tsx
-Select.tsx
-StatusBadge.tsx
-Tabs.tsx
-Toast.tsx
-Tooltip.tsx
-```
-
-The purpose of this component layer is to keep the product consistent while allowing future pages to be developed quickly.
-
----
-
-# 🧪 Design Laboratory
-
-The project includes an internal component showcase:
-
-```text
-/design-system
-```
-
-It is designed to provide a central place for testing the SmartPark design language and reusable UI components.
-
-The showcase includes:
-
-1. Brand
-2. Colors
-3. Typography
-4. Controls
-5. Forms
-6. Status indicators
-7. Metrics
-8. Parking slots
-9. Intelligence
-10. Navigation
-11. Feedback states
-12. Motion
-
-The page is intended as a development and visual QA environment rather than a production-facing page.
-
----
-
-# 🛠️ Technology Stack
-
-## Frontend
-
-| Technology    | Purpose                   |
-| ------------- | -------------------------- |
-| Next.js       | Web application framework  |
-| React         | UI layer                    |
-| TypeScript    | Type safety                 |
-| Tailwind CSS  | Styling system              |
-| Framer Motion | Interface motion            |
-| Lucide React  | Icons                        |
-
-## Backend
-
-| Technology | Purpose       |
-| ---------- | ------------- |
-| Node.js    | Runtime       |
-| Fastify    | API framework |
-| TypeScript | Type safety   |
-| Prisma     | Database ORM  |
-
-## AI Engine
-
-| Technology | Purpose         |
-| ---------- | ---------------- |
-| Python     | AI/data runtime  |
-| FastAPI    | AI service API   |
-| Uvicorn    | ASGI server       |
-
-## Database
-
-| Technology | Purpose                     |
-| ---------- | ---------------------------- |
-| PostgreSQL | Primary relational database  |
-| Prisma     | Database access layer         |
-
----
-
-# 🏗️ Architecture
-
-SmartPark AI 2.0 follows a service-oriented architecture.
-
-```text
-                         USER
-                           │
-                           ▼
-              ┌─────────────────────────┐
-              │       NEXT.JS APP       │
-              │        FRONTEND         │
-              │                         │
-              │  Overview               │
-              │  Live Map               │
-              │  Intelligence           │
-              │  Bookings               │
-              │  Pricing                │
-              └────────────┬────────────┘
-                           │
-                           ▼
-              ┌─────────────────────────┐
-              │       FASTIFY API       │
-              │        BACKEND          │
-              │                         │
-              │  Business Logic         │
-              │  API Routes             │
-              │  Authentication         │
-              │  Parking Data           │
-              └───────┬─────────┬───────┘
-                      │         │
-                      ▼         ▼
-             ┌────────────┐  ┌────────────┐
-             │ PostgreSQL │  │ AI ENGINE  │
-             │  Prisma    │  │  FastAPI   │
-             └────────────┘  └─────┬──────┘
-                                   │
-                                   ▼
-                            Intelligence
-                              Models
-```
-
----
-
-# 📁 Project Structure
-
-```text
-smartpark-ai-2.0/
+├── frontend/             # Next.js App Router Frontend
+│   ├── app/              # Page layouts & route definitions
+│   ├── components/       # Custom reusable UI components
+│   ├── lib/              # Local data adapters, auth service, & mock data
+│   └── tailwind.config.ts# Design tokens and theme definition
 │
-├── frontend/
-│   │
-│   ├── app/
-│   │   ├── design-system/
-│   │   │   └── page.tsx
-│   │   ├── globals.css
-│   │   ├── layout.tsx
-│   │   └── page.tsx
-│   │
-│   ├── components/
-│   │   └── ui/
-│   │       ├── AIInsight.tsx
-│   │       ├── Badge.tsx
-│   │       ├── Button.tsx
-│   │       ├── Card.tsx
-│   │       ├── Drawer.tsx
-│   │       ├── EmptyState.tsx
-│   │       ├── ErrorState.tsx
-│   │       ├── Header.tsx
-│   │       ├── IconButton.tsx
-│   │       ├── Input.tsx
-│   │       ├── LoadingSkeleton.tsx
-│   │       ├── Metric.tsx
-│   │       ├── MetricCard.tsx
-│   │       ├── Modal.tsx
-│   │       ├── ParkingSlot.tsx
-│   │       ├── SearchInput.tsx
-│   │       ├── Select.tsx
-│   │       ├── StatusBadge.tsx
-│   │       ├── Tabs.tsx
-│   │       ├── Toast.tsx
-│   │       └── Tooltip.tsx
-│   │
-│   ├── package.json
-│   ├── next.config.mjs
-│   ├── tailwind.config.ts
-│   └── tsconfig.json
+├── backend/              # Fastify Gateway Service
+│   ├── src/index.ts      # Server index & configuration
+│   ├── prisma/           # Prisma schema definition
+│   └── package.json      # Node dependencies (Fastify, Prisma)
 │
-├── backend/
-│   │
-│   ├── src/
-│   │   └── index.ts
-│   │
-│   ├── prisma/
-│   │   └── schema.prisma
-│   │
-│   ├── package.json
-│   └── tsconfig.json
-│
-├── ai-engine/
-│   │
-│   ├── app/
-│   │   └── main.py
-│   │
-│   └── requirements.txt
-│
-├── .env.example
-├── .gitignore
-├── package-lock.json
-└── README.md
+├── ai-engine/            # FastAPI Python Forecasting Engine
+│   ├── app/main.py       # API endpoints & load logic
+│   └── requirements.txt  # Python package definitions
 ```
 
 ---
 
-# 🚀 Getting Started
+## ⚙️ Setup and Installation
 
-## Prerequisites
-
-Install the following:
-
-- Node.js
-- npm
-- Python 3.x
-- Git
-- PostgreSQL
-
-Verify Node.js:
-
-```bash
-node --version
-```
-
-Verify npm:
-
-```bash
-npm --version
-```
-
-Verify Python:
-
-```bash
-python --version
-```
-
-Verify Git:
-
-```bash
-git --version
-```
+### 1. Prerequisites
+- Node.js (v18.x or later)
+- Python (v3.9 or later)
 
 ---
 
-# 📥 Clone the Repository
-
-```bash
-git clone https://github.com/Prathamcoder3000/smartpark-ai-2.0.git
-```
-
-Enter the project:
-
-```bash
-cd smartpark-ai-2.0
-```
-
----
-
-# 🎨 Frontend Setup
-
-Navigate to the frontend:
-
+### 2. Frontend Installation (`:3000`)
 ```bash
 cd frontend
+npm install
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+### 3. Backend Setup (`:8001`)
+Create a local `.env` inside `/backend` following the `.env.example`:
+```env
+PORT=8001
+DATABASE_URL="postgresql://user:password@localhost:5432/smartpark"
 ```
 
 Install dependencies:
-
 ```bash
+cd backend
 npm install
-```
-
-Start development server:
-
-```bash
 npm run dev
 ```
 
-Frontend:
-
-```text
-http://localhost:3001
-```
-
-Design laboratory:
-
-```text
-http://localhost:3001/design-system
-```
-
 ---
 
-# ⚙️ Backend Setup
-
-Open a new terminal.
-
-Navigate to:
-
+### 4. AI Engine Setup (`:8000`)
+Install packages:
 ```bash
-cd smartpark-ai-2.0/backend
-```
-
-Install dependencies:
-
-```bash
-npm install
-```
-
-Start the development server:
-
-```bash
-npm run dev
-```
-
-Backend:
-
-```text
-http://localhost:8001
-```
-
-Health endpoint:
-
-```text
-http://localhost:8001/health
-```
-
-Expected response:
-
-```json
-{
-  "status": "ok"
-}
+cd ai-engine
+pip install -r requirements.txt
+uvicorn app.main:app --port 8000 --reload
 ```
 
 ---
 
-# 🤖 AI Engine Setup
-
-Open another terminal.
-
-Navigate to:
-
-```bash
-cd smartpark-ai-2.0/ai-engine
-```
-
-Install Python dependencies:
-
-```bash
-python -m pip install -r requirements.txt
-```
-
-Start the AI service:
-
-```bash
-python -m uvicorn app.main:app --reload --port 8002
-```
-
-AI engine:
-
-```text
-http://localhost:8002
-```
-
-Health endpoint:
-
-```text
-http://localhost:8002/health
-```
-
-Expected response:
-
-```json
-{
-  "status": "ok"
-}
-```
-
----
-
-# 🗄️ Database
-
-The backend uses:
-
-**PostgreSQL + Prisma**
-
-The Prisma schema is located at:
-
-```text
-backend/prisma/schema.prisma
-```
-
-Database configuration is supplied through environment variables.
-
-The production database and full application data integration will be implemented during the backend integration phases.
-
----
-
-# 🔐 Environment Configuration
-
-Environment examples are provided through:
-
-```text
-.env.example
-```
-
-Local environment files should be created as required.
-
-### Never commit:
-
-```text
-.env
-.env.local
-API keys
-Database passwords
-Private credentials
-Service-account files
-Private keys
-```
-
-The repository `.gitignore` excludes local environment files and generated dependencies.
-
----
-
-# 🌐 Available Services
-
-| Service   |   Port | Purpose                      |
-| --------- | -----: | ----------------------------- |
-| Frontend  | `3001` | Next.js application           |
-| Backend   | `8001` | Fastify API                    |
-| AI Engine | `8002` | FastAPI intelligence service   |
-
----
-
-# 🧪 Verification
-
-## Frontend Production Build
-
-From:
-
-```text
-frontend/
-```
-
-run:
-
-```bash
-npm run build
-```
-
-The build should complete without:
-
-- TypeScript errors
-- JSX syntax errors
-- Module resolution errors
-- Next.js compilation errors
-
----
-
-## Backend Health Check
-
-```text
-GET /health
-```
-
-Expected:
-
-```json
-{
-  "status": "ok"
-}
-```
-
----
-
-## AI Engine Health Check
-
-```text
-GET /health
-```
-
-Expected:
-
-```json
-{
-  "status": "ok"
-}
-```
-
----
-
-# 🛣️ Development Roadmap
-
-## Phase 1 — Foundation
-
-- [x] Project architecture
-- [x] Frontend foundation
-- [x] Backend foundation
-- [x] AI-engine foundation
-- [x] Prisma foundation
-- [x] Environment configuration
-- [x] Health endpoints
-- [x] Git/GitHub setup
-
----
-
-## Phase 2 — Premium UI System
-
-- [x] SmartPark visual identity
-- [x] Premium dark theme
-- [x] Typography system
-- [x] Color system
-- [x] Spatial grid
-- [x] Reusable UI components
-- [x] Parking slot visualization
-- [x] AI Insight component
-- [x] Responsive navigation
-- [x] Design laboratory
-- [x] Overview interface foundation
-
----
-
-## Phase 3 — Driver Experience
-
-- [ ] Live parking map
-- [ ] Parking facility discovery
-- [ ] Search
-- [ ] Parking facility details
-- [ ] Availability visualization
-- [ ] Floor selection
-- [ ] Parking slot selection
-- [ ] Parking recommendations
-
----
-
-## Phase 4 — Authentication & User Profile
-
-- [ ] Login
-- [ ] Sign Up
-- [ ] Authentication flow
-- [ ] User profile
-- [ ] Saved parking
-- [ ] Notification preferences
-- [ ] User settings
-
----
-
-## Phase 5 — Booking System
-
-- [ ] Booking flow
-- [ ] Parking reservation
-- [ ] Booking confirmation
-- [ ] Digital parking pass
-- [ ] Booking history
-- [ ] Cancellation flow
-
----
-
-## Phase 6 — AI Intelligence
-
-- [ ] Intelligence dashboard
-- [ ] Occupancy prediction
-- [ ] Demand forecasting
-- [ ] Recommendation engine
-- [ ] Parking scoring
-- [ ] Predictive availability
-- [ ] Intelligence explanations
-
----
-
-## Phase 7 — Backend Integration
-
-- [ ] Database models
-- [ ] Parking APIs
-- [ ] Authentication APIs
-- [ ] Booking APIs
-- [ ] User APIs
-- [ ] Frontend/backend integration
-- [ ] AI-engine integration
-- [ ] Real-time parking data
-
----
-
-## Phase 8 — Operations Platform
-
-- [ ] Operator dashboard
-- [ ] Occupancy analytics
-- [ ] Utilization analytics
-- [ ] Demand trends
-- [ ] Peak-period analysis
-- [ ] Operational recommendations
-- [ ] Pricing intelligence
-
----
-
-## Phase 9 — Finalization
-
-- [ ] Responsive testing
-- [ ] Accessibility testing
-- [ ] Performance optimization
-- [ ] Error handling
-- [ ] Loading states
-- [ ] API reliability
-- [ ] Security review
-- [ ] Documentation
-- [ ] Deployment
-- [ ] Final presentation
-
----
-
-# 🌱 Future Scope
-
-SmartPark AI 2.0 can eventually be extended with:
-
-### IoT
-- Smart parking sensors
-- Real-time occupancy sensors
-- Gate systems
-- Vehicle detection
-
-### Computer Vision
-- Camera-based occupancy detection
-- Vehicle classification
-- Parking-space detection
-- Automated occupancy updates
-
-### Artificial Intelligence
-- Advanced occupancy forecasting
-- Demand prediction
-- Recommendation ranking
-- Dynamic pricing intelligence
-- Traffic-aware recommendations
-
-### Mobility
-- Navigation integration
-- EV charging availability
-- Multi-modal mobility
-- Smart-city infrastructure integration
-
-### Mobile
-- Android application
-- iOS application
-- Digital parking pass
-- Push notifications
-
-### Operations
-- Parking operator control center
-- Facility analytics
-- Demand heatmaps
-- Historical trends
-- Pricing optimization
-
----
-
-# 🔒 Development Principles
-
-SmartPark AI 2.0 follows several development principles.
-
-## 01 — Build the Foundation First
-The project establishes the architecture and reusable components before implementing complex product functionality.
-
-## 02 — Separate Services
-The frontend, backend, and AI engine are maintained as separate services.
-
-## 03 — Reusable UI
-Common interface elements are implemented as reusable components.
-
-## 04 — Data-Driven Intelligence
-Future AI decisions should be based on real data rather than arbitrary hardcoded values.
-
-## 05 — Explainable Recommendations
-Where possible, SmartPark should explain **why** a parking option is recommended.
-
-## 06 — Responsive by Design
-The interface should work across desktop, tablet, and mobile screen sizes.
-
-## 07 — Security by Default
-Secrets, credentials, and environment-specific configuration should never be committed to the repository.
-
----
-
-# 📊 Product Direction
-
-The long-term SmartPark experience can be represented as:
-
-```text
-                 PARKING DATA
-                      │
-                      ▼
-              ┌───────────────┐
-              │ Data Processing│
-              └───────┬───────┘
-                      │
-          ┌───────────┼───────────┐
-          ▼           ▼           ▼
-      Availability  Demand     Pricing
-          │        Prediction   Signals
-          └───────────┼───────────┘
-                      ▼
-              SMARTPARK AI
-                      │
-          ┌───────────┴───────────┐
-          ▼                       ▼
-       DRIVER                  OPERATOR
-          │                       │
-          ▼                       ▼
-   Better Parking          Better Operations
-      Decisions                Decisions
-```
-
----
-
-# 🎓 Project Purpose
-
-SmartPark AI 2.0 is a full-stack engineering and artificial intelligence project exploring the intersection of:
-
-**Artificial Intelligence + Smart Mobility + Spatial Computing + Data Analytics + Full-Stack Engineering**
-
-The project focuses on how intelligent software can improve parking decisions for drivers while helping parking operators understand and manage their infrastructure more effectively.
-
----
-
-# 📌 Current Project Status
-
-> 🚧 **SmartPark AI 2.0 is under active development.**
-
-As of **August 9, 2026**, the project has completed its:
-
-- Technical foundation
-- Frontend foundation
-- Backend foundation
-- AI-engine foundation
-- Database foundation
-- Premium design system
-- Reusable UI component library
-- Parking visualization foundation
-- Intelligence UI foundation
-- Responsive navigation foundation
-- Design laboratory
-- Overview interface foundation
-
-The next development stage focuses on building the **actual parking product experiences**, beginning with the Live Map and driver parking discovery flow.
-
----
-
-# 👨‍💻 Developer
-
-## Pratham
-
-**Computer Engineering Student**
-**Full-Stack Developer • AI/ML Enthusiast**
-
-Interested in building practical software, intelligent applications, and scalable full-stack systems.
-
----
-
-# ⭐ SmartPark AI 2.0
-
-> **Making parking more predictable, intelligent, and connected.**
-
----
-
-# 📄 License
-
-This project is currently being developed as an academic and portfolio project.
-
-A formal open-source license may be added in a future release.
+## 📋 Development Roadmap
+
+- [x] Initial design system, tokens, and font structures.
+- [x] Core layout viewports and responsive sidebar components.
+- [x] Interactive `/map` level selector and mock booking dashboard.
+- [x] Operator `/login` & `/signup` interface models.
+- [x] User Account `/profile` settings with preference overrides.
+- [x] Dynamic `/search` engine with auto-complete suggestions and filters.
+- [ ] Connect Fastify API endpoints to Next.js data hooks.
+- [ ] Implement database records inside PostgreSQL using Prisma.
+- [ ] Integrate FastAPI Python forecasting scripts for occupancy predictions.
+- [ ] Support production JWT authentication sessions.
