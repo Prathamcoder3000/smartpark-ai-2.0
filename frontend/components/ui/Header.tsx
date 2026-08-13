@@ -93,9 +93,16 @@ export const Header: React.FC = () => {
             </div>
 
             {/* Profile Avatar */}
-            <IconButton variant="ghost" size="sm" className="h-8 w-8" aria-label="Account profile">
-              <User className="h-3.5 w-3.5 text-smartTextSecondary" />
-            </IconButton>
+            <Link href="/profile">
+              <IconButton
+                variant="ghost"
+                size="sm"
+                className={`h-8 w-8 ${pathname === '/profile' ? 'bg-smartSurface border border-smartBorder text-signature' : ''}`}
+                aria-label="Account profile"
+              >
+                <User className={`h-3.5 w-3.5 ${pathname === '/profile' ? 'text-signature' : 'text-smartTextSecondary'}`} />
+              </IconButton>
+            </Link>
 
             {/* Mobile Hamburger menu */}
             <IconButton
@@ -183,17 +190,21 @@ export const Header: React.FC = () => {
 
               {/* Mobile Footer Info */}
               <div className="border-t border-smartBorder/40 pt-4 flex flex-col gap-2">
-                <div className="flex items-center gap-3">
+                <Link
+                  href="/profile"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 p-1.5 rounded-smart hover:bg-smartSurface transition-colors"
+                >
                   <div className="h-8 w-8 rounded-full bg-smartSurface border border-smartBorder flex items-center justify-center">
-                    <User className="h-3.5 w-3.5 text-smartTextSecondary" />
+                    <User className="h-3.5 w-3.5 text-signature" />
                   </div>
                   <div>
-                    <div className="text-xs font-semibold text-smartTextPrimary">Prathamesh</div>
-                    <div className="text-[9px] text-smartTextSecondary">Operator Session</div>
+                    <div className="text-xs font-semibold text-smartTextPrimary">Pratham</div>
+                    <div className="text-[9px] text-smartTextSecondary">Active Operator Session</div>
                   </div>
-                </div>
+                </Link>
                 <div className="text-[9px] font-mono text-smartTextSecondary/60 mt-2">
-                  SMARTPARK AI V2.0.0 · DESIGN LAB
+                  SMARTPARK AI V2.0.0 · USER ACCOUNT
                 </div>
               </div>
             </motion.div>
