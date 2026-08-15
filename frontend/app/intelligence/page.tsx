@@ -38,6 +38,7 @@ import {
 
 export default function IntelligencePage() {
   // --- States ---
+  const [mounted, setMounted] = React.useState<boolean>(false);
   const [region, setRegion] = React.useState<string>('metro-central');
   const [forecastHorizon, setForecastHorizon] = React.useState<string>('60');
   const [priority, setPriority] = React.useState<string>('best-overall');
@@ -45,6 +46,10 @@ export default function IntelligencePage() {
   const [sortKey, setSortKey] = React.useState<string>('recommendation');
   const [sortAsc, setSortAsc] = React.useState<boolean>(false);
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
   
   // Toast state
   const [toastOpen, setToastOpen] = React.useState<boolean>(false);
@@ -181,7 +186,7 @@ export default function IntelligencePage() {
               </span>
             </div>
             <span className="text-[9px] font-mono text-smartTextSecondary/60 mt-1">
-              Last Refreshed: {new Date().toLocaleTimeString()} (Local Feed)
+              Last Refreshed: {mounted ? new Date().toLocaleTimeString() : '--:--:--'} (Local Feed)
             </span>
           </div>
         </div>

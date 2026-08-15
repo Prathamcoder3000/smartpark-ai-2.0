@@ -17,6 +17,7 @@ export const Header: React.FC = () => {
     { label: 'Live Map', href: '/map', highlight: true },
     { label: 'Intelligence', href: '/intelligence' },
     { label: 'Bookings', href: '/bookings' },
+    { label: 'Operator', href: '/operator' },
     { label: 'Pricing', href: '/pricing' },
   ];
 
