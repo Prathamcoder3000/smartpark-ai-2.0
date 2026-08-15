@@ -727,7 +727,7 @@ export default function HomePage() {
                   Launch Live Map
                 </Button>
               </Link>
-              <Link href="/predictions">
+              <Link href="/intelligence">
                 <Button variant="secondary" size="lg" className="text-xs uppercase tracking-wider font-semibold px-6">
                   Explore AI Intelligence
                 </Button>

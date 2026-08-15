@@ -15,7 +15,7 @@ export const Header: React.FC = () => {
   const navItems = [
     { label: 'Overview', href: '/' },
     { label: 'Live Map', href: '/map', highlight: true },
-    { label: 'Intelligence', href: '/predictions' },
+    { label: 'Intelligence', href: '/intelligence' },
     { label: 'Bookings', href: '/bookings' },
     { label: 'Pricing', href: '/pricing' },
   ];
