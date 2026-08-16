@@ -230,13 +230,14 @@ export default function FacilityDetailsPage() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <Button
-                  variant="primary"
-                  onClick={() => triggerToast('Reservation flow will connect in the next frontend checkpoint.', 'info')}
-                  className="w-full text-xs h-9 justify-center gap-1"
-                >
-                  RESERVE PARKING
-                </Button>
+                <Link href={`/reserve?facility=${facility.slug}`} className="w-full">
+                  <Button
+                    variant="primary"
+                    className="w-full text-xs h-9 justify-center gap-1"
+                  >
+                    RESERVE PARKING
+                  </Button>
+                </Link>
                 <Link href="/map" className="w-full">
                   <Button variant="secondary" className="w-full text-xs h-9 justify-center gap-1.5">
                     <Map className="h-3.5 w-3.5 text-signature" />
@@ -664,13 +665,14 @@ export default function FacilityDetailsPage() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3">
-              <Button
-                variant="primary"
-                onClick={() => triggerToast('Reservation flow will connect in the next frontend checkpoint.', 'info')}
-                className="text-xs h-10 px-6 justify-center gap-1.5"
-              >
-                RESERVE PARKING
-              </Button>
+              <Link href={`/reserve?facility=${facility.slug}`}>
+                <Button
+                  variant="primary"
+                  className="text-xs h-10 px-6 justify-center gap-1.5"
+                >
+                  RESERVE PARKING
+                </Button>
+              </Link>
               <Link href="/map">
                 <Button variant="secondary" className="text-xs h-10 px-6 justify-center gap-1.5">
                   <Map className="h-3.5 w-3.5 text-signature" />
@@ -871,16 +873,15 @@ export default function FacilityDetailsPage() {
                 Close Details
               </Button>
               {selectedSlot.state === 'AVAILABLE' && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedSlot(null);
-                    triggerToast('Reservation flow will connect in the next frontend checkpoint.', 'info');
-                  }}
-                >
-                  Reserve Slot
-                </Button>
+                <Link href={`/reserve?facility=${facility.slug}&slot=${selectedSlot.id}&floor=${activeFloor?.id}`}>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setSelectedSlot(null)}
+                  >
+                    Reserve Slot
+                  </Button>
+                </Link>
               )}
             </div>
           </div>

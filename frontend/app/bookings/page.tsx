@@ -38,6 +38,45 @@ import { MOCK_BOOKINGS, Booking, BookingStatus } from '../../lib/bookingsData';
 export default function BookingsPage() {
   // --- States ---
   const [bookings, setBookings] = React.useState<Booking[]>(MOCK_BOOKINGS);
+
+  React.useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem('smartpark_prototype_reservation');
+      if (stored) {
+        const protoRes = JSON.parse(stored);
+        const startHour = parseInt(protoRes.selection.startTime.split(':')[0]) || 9;
+        const durationHours = parseInt(protoRes.selection.duration) || 2;
+        const endTimeStr = `${(startHour + durationHours).toString().padStart(2, '0')}:00`;
+
+        const mappedBooking: Booking = {
+          id: protoRes.reference,
+          facilityName: protoRes.facility.name,
+          facilityAddress: protoRes.facility.address,
+          date: protoRes.selection.date,
+          startTime: protoRes.selection.startTime,
+          endTime: endTimeStr,
+          slotNumber: protoRes.selection.slotId.split('-').pop() || protoRes.selection.slotId,
+          floor: protoRes.floorLabel,
+          vehicle: protoRes.selection.vehicleId.startsWith('veh-1') ? 'MH-01-DR-4829 (Honda City)' : 'MH-01-EE-9021 (Nexon EV)',
+          amount: protoRes.pricing.totalAmount,
+          bookingStatus: 'UPCOMING',
+          bookingReference: protoRes.reference,
+          distanceKm: protoRes.facility.distanceKm,
+          walkMinutes: protoRes.facility.walkingEta,
+          amenities: protoRes.facility.hasEv ? ['EV Charging', 'Covered Parking'] : ['Covered Parking'],
+          createdDate: protoRes.createdAt
+        };
+
+        setBookings((prev) => {
+          if (prev.some((b) => b.id === mappedBooking.id)) return prev;
+          return [mappedBooking, ...prev];
+        });
+      }
+    } catch (e) {
+      console.error('Failed to load prototype booking', e);
+    }
+  }, []);
+
   const [activeFilter, setActiveFilter] = React.useState<string>('ALL');
   const [selectedBookingDetails, setSelectedBookingDetails] = React.useState<Booking | null>(null);
   const [bookingToCancel, setBookingToCancel] = React.useState<Booking | null>(null);
