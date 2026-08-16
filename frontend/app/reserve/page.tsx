@@ -106,6 +106,12 @@ export default function ReservePage() {
         if (match.floors.length > 0) {
           setActiveFloorTab(initialFloorId || match.floors[0].id);
         }
+      } else {
+        if (MOCK_FACILITY_DETAILS.length > 0) {
+          setSelectedFacilityId(MOCK_FACILITY_DETAILS[0].id);
+          setActiveFloorTab(MOCK_FACILITY_DETAILS[0].floors[0].id);
+        }
+        triggerToast('Requested facility not found. Defaulting to Central Plaza.', 'warning');
       }
     } else if (MOCK_FACILITY_DETAILS.length > 0) {
       setSelectedFacilityId(MOCK_FACILITY_DETAILS[0].id);

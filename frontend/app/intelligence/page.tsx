@@ -334,18 +334,17 @@ export default function IntelligencePage() {
                       <ChevronRight className="h-3.5 w-3.5 ml-1 transition-transform group-hover:translate-x-1" />
                     </Button>
                   </Link>
-                  <Button 
-                    variant="secondary" 
-                    size="md" 
-                    className="text-xs uppercase tracking-wider font-semibold"
-                    onClick={() => {
-                      const element = document.getElementById('comparison-section');
-                      element?.scrollIntoView({ behavior: 'smooth' });
-                      showToast('Scrolling to alternative options comparison table', 'info');
-                    }}
-                  >
-                    Explore Alternatives
-                  </Button>
+                  
+                  <Link href={`/facility/${
+                    selectedFacility.name.toLowerCase().includes('metro') ? 'metro-central-garage' :
+                    selectedFacility.name.toLowerCase().includes('cyber') ? 'cyber-city-hub' :
+                    selectedFacility.name.toLowerCase().includes('tech') ? 'techpark-parking' :
+                    'financial-plaza-deck'
+                  }`}>
+                    <Button variant="secondary" size="md" className="text-xs uppercase tracking-wider font-semibold">
+                      View Facility
+                    </Button>
+                  </Link>
                 </div>
               </div>
 

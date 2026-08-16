@@ -351,6 +351,34 @@ export default function ProfilePage() {
                 </button>
               </div>
             </Card>
+
+            {/* QUICK LINK DIRECTORIES */}
+            <Card variant="default" padding="lg" className="space-y-4">
+              <h3 className="text-xs font-semibold font-display uppercase tracking-wider text-smartTextPrimary border-b border-smartBorder/50 pb-3 flex items-center gap-2">
+                <Bookmark className="h-4 w-4 text-signature" />
+                Quick Navigation
+              </h3>
+              <div className="grid grid-cols-1 gap-2">
+                <Link href="/bookings">
+                  <div className="w-full flex items-center justify-between p-2.5 rounded-smart bg-smartSurface/60 border border-smartBorder/60 hover:border-smartBorder hover:bg-smartElevated transition-all text-xs text-smartTextPrimary font-medium cursor-pointer">
+                    <span>My Bookings</span>
+                    <span className="text-[10px] text-signature">&rarr;</span>
+                  </div>
+                </Link>
+                <Link href="/notifications">
+                  <div className="w-full flex items-center justify-between p-2.5 rounded-smart bg-smartSurface/60 border border-smartBorder/60 hover:border-smartBorder hover:bg-smartElevated transition-all text-xs text-smartTextPrimary font-medium cursor-pointer">
+                    <span>Notifications Center</span>
+                    <span className="text-[10px] text-signature">&rarr;</span>
+                  </div>
+                </Link>
+                <Link href="/support">
+                  <div className="w-full flex items-center justify-between p-2.5 rounded-smart bg-smartSurface/60 border border-smartBorder/60 hover:border-smartBorder hover:bg-smartElevated transition-all text-xs text-smartTextPrimary font-medium cursor-pointer">
+                    <span>Support & Help Desk</span>
+                    <span className="text-[10px] text-signature">&rarr;</span>
+                  </div>
+                </Link>
+              </div>
+            </Card>
           </div>
 
           {/* RIGHT COLUMN: PREFERENCES, INTELLIGENCE, SAVED, BOOKINGS & NOTIFICATIONS */}

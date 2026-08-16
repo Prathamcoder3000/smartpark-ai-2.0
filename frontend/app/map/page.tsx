@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
@@ -517,17 +519,35 @@ const FacilityDetailsPanel: React.FC<FacilityDetailsPanelProps> = ({
         <span>/ 5.0 community rating</span>
       </div>
 
-      {/* CTA */}
-      <Button
-        variant="primary"
-        size="md"
-        onClick={onViewParking}
-        className="w-full text-xs uppercase tracking-wider font-semibold"
-      >
-        <CarFront className="h-3.5 w-3.5 shrink-0" />
-        View Parking Bays
-        <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-      </Button>
+      {/* CTAs */}
+      <div className="flex gap-2">
+        <Button
+          variant="primary"
+          size="md"
+          onClick={onViewParking}
+          className="flex-1 text-xs uppercase tracking-wider font-semibold"
+        >
+          <CarFront className="h-3.5 w-3.5 shrink-0" />
+          View Bays
+        </Button>
+        
+        <Link href={`/facility/${
+          ({
+            'fac-01': 'cyber-city-hub',
+            'fac-02': 'metro-central-garage',
+            'fac-03': 'techpark-parking',
+            'fac-04': 'financial-plaza-deck'
+          }[facility.id] || facility.id)
+        }`} className="flex-1">
+          <Button
+            variant="secondary"
+            size="md"
+            className="w-full text-xs uppercase tracking-wider font-semibold"
+          >
+            View Details
+          </Button>
+        </Link>
+      </div>
     </div>
   );
 };
@@ -595,6 +615,7 @@ const FloorSlotGrid: React.FC<FloorSlotGridProps> = ({
 // ─── Main Page Component ──────────────────────────────────────
 
 export default function LiveMapPage() {
+  const router = useRouter();
   // ── Search & filter state ─────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<MapFilter>('ALL');
@@ -712,11 +733,16 @@ export default function LiveMapPage() {
   );
 
   const handleReserveSlot = useCallback(() => {
-    showToast(
-      'Reservation flow will be connected to the backend in a future sprint. Your slot hold has been noted.',
-      'info'
-    );
-  }, [showToast]);
+    if (!selectedFacility || !selectedSlotId) return;
+    const map: Record<string, string> = {
+      'fac-01': 'cyber-city-hub',
+      'fac-02': 'metro-central-garage',
+      'fac-03': 'techpark-parking',
+      'fac-04': 'financial-plaza-deck'
+    };
+    const slug = map[selectedFacility.id] || selectedFacility.id;
+    router.push(`/reserve?facility=${slug}&slot=${selectedSlotId}&floor=${activeFloorId}`);
+  }, [selectedFacility, selectedSlotId, activeFloorId, router]);
 
   const handleCloseDrawer = useCallback(() => {
     setIsFloorDrawerOpen(false);
