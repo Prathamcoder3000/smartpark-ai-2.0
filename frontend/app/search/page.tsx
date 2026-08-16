@@ -657,14 +657,15 @@ export default function SearchPage() {
 
                 {/* 9. FACILITY ACTIONS */}
                 <div className="flex items-center justify-end gap-2 pt-3 border-t border-smartBorder/40">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setSelectedFacility(facility)}
-                    className="text-xs h-8"
-                  >
-                    View Details
-                  </Button>
+                  <Link href={`/facility/${facility.id}`}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="text-xs h-8"
+                    >
+                      View Details
+                    </Button>
+                  </Link>
 
                   <Link href="/map">
                     <Button variant="primary" size="sm" className="text-xs h-8 gap-1">

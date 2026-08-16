@@ -93,12 +93,17 @@ export const Header: React.FC = () => {
             </Link>
 
             {/* Notifications Trigger */}
-            <div className="relative">
-              <IconButton variant="ghost" size="sm" className="h-8 w-8" aria-label="View notifications">
-                <Bell className="h-3.5 w-3.5 text-smartTextSecondary" />
+            <Link href="/notifications" className="relative block">
+              <IconButton
+                variant="ghost"
+                size="sm"
+                className={`h-8 w-8 ${pathname === '/notifications' ? 'bg-smartSurface border border-smartBorder text-signature' : ''}`}
+                aria-label="View notifications"
+              >
+                <Bell className={`h-3.5 w-3.5 ${pathname === '/notifications' ? 'text-signature' : 'text-smartTextSecondary'}`} />
               </IconButton>
               <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-signature ring-1 ring-smartBg" />
-            </div>
+            </Link>
 
             {/* Profile Avatar */}
             <Link href="/profile">
