@@ -67,7 +67,7 @@ export default function LoginPage() {
       if (res.success) {
         setIsSuccess(true);
         setTimeout(() => {
-          router.push('/');
+          router.push('/home');
         }, 1200);
       } else {
         setApiError(res.error || 'Authentication failed. Please try again.');

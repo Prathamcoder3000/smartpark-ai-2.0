@@ -36,7 +36,7 @@ export interface AuthResponse {
  * Swap this out with real backend API calls (REST/GraphQL/Supabase/Firebase) seamlessly in future.
  */
 class AuthService {
-  private static STORAGE_KEY = 'smartpark_auth_user';
+  private static STORAGE_KEY = 'smartpark_auth_session';
 
   /**
    * Mock login attempt
@@ -69,8 +69,15 @@ class AuthService {
       role: 'operator',
     };
 
-    if (credentials.rememberMe && typeof window !== 'undefined') {
-      localStorage.setItem(AuthService.STORAGE_KEY, JSON.stringify(mockUser));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(
+        AuthService.STORAGE_KEY,
+        JSON.stringify({
+          authenticated: true,
+          userId: mockUser.id,
+          email: mockUser.email,
+        })
+      );
     }
 
     return {
@@ -103,7 +110,14 @@ class AuthService {
     };
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem(AuthService.STORAGE_KEY, JSON.stringify(mockUser));
+      localStorage.setItem(
+        AuthService.STORAGE_KEY,
+        JSON.stringify({
+          authenticated: true,
+          userId: mockUser.id,
+          email: mockUser.email,
+        })
+      );
     }
 
     return {
@@ -119,9 +133,32 @@ class AuthService {
     if (typeof window === 'undefined') return null;
     try {
       const stored = localStorage.getItem(AuthService.STORAGE_KEY);
-      return stored ? JSON.parse(stored) : null;
+      if (!stored) return null;
+      const session = JSON.parse(stored);
+      if (!session.authenticated) return null;
+      return {
+        id: session.userId || 'demo-user',
+        email: session.email || 'demo@smartpark.local',
+        name: (session.email || 'demo@smartpark.local').split('@')[0].replace(/[^a-zA-Z0-9]/g, ' ') || 'SmartPark User',
+        role: 'operator',
+      };
     } catch {
       return null;
+    }
+  }
+
+  /**
+   * Check if authenticated
+   */
+  isAuthenticated(): boolean {
+    if (typeof window === 'undefined') return false;
+    try {
+      const stored = localStorage.getItem(AuthService.STORAGE_KEY);
+      if (!stored) return false;
+      const session = JSON.parse(stored);
+      return !!session.authenticated;
+    } catch {
+      return false;
     }
   }
 

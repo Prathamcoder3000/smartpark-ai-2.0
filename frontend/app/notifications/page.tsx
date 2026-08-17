@@ -38,12 +38,23 @@ import {
   NotificationPriority,
   NotificationFilter
 } from '../../lib/notificationData';
+import { authService } from '../../lib/auth';
 
 export default function NotificationsPage() {
   const router = useRouter();
+  const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
 
   // State management for notifications
   const [notifications, setNotifications] = React.useState<Notification[]>(INITIAL_MOCK_NOTIFICATIONS);
+
+  React.useEffect(() => {
+    const authed = authService.isAuthenticated();
+    if (!authed) {
+      router.push('/login');
+    } else {
+      setIsAuthenticated(true);
+    }
+  }, [router]);
   const [activeFilter, setActiveFilter] = React.useState<NotificationFilter>('ALL');
   const [selectedNotification, setSelectedNotification] = React.useState<Notification | null>(null);
 
@@ -166,6 +177,14 @@ export default function NotificationsPage() {
       triggerToast('No additional action available for this notification.', 'info');
     }
   };
+
+  if (isAuthenticated === null) {
+    return (
+      <div className="min-h-screen bg-smartBg flex items-center justify-center font-mono text-xs text-smartTextSecondary">
+        Checking authentication...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-smartBg text-smartTextPrimary flex flex-col font-sans pb-20 selection:bg-signature/20 selection:text-signature">

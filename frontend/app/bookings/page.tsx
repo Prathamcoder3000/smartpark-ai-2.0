@@ -34,10 +34,24 @@ import { Modal } from '../../components/ui/Modal';
 import { Toast } from '../../components/ui/Toast';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { MOCK_BOOKINGS, Booking, BookingStatus } from '../../lib/bookingsData';
+import { useRouter } from 'next/navigation';
+import { authService } from '../../lib/auth';
 
 export default function BookingsPage() {
+  const router = useRouter();
+  const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
+
   // --- States ---
   const [bookings, setBookings] = React.useState<Booking[]>(MOCK_BOOKINGS);
+
+  React.useEffect(() => {
+    const authed = authService.isAuthenticated();
+    if (!authed) {
+      router.push('/login');
+    } else {
+      setIsAuthenticated(true);
+    }
+  }, [router]);
 
   React.useEffect(() => {
     try {
@@ -156,6 +170,14 @@ export default function BookingsPage() {
     passElement?.scrollIntoView({ behavior: 'smooth' });
     showToast(`Loaded digital pass for ${booking.facilityName}`, 'info');
   };
+
+  if (isAuthenticated === null) {
+    return (
+      <div className="min-h-screen bg-smartBg flex items-center justify-center font-mono text-xs text-smartTextSecondary">
+        Checking authentication...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-smartBg text-smartTextPrimary pb-16 relative">

@@ -7,13 +7,21 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, Bell, User, Search, Map, Sparkles } from 'lucide-react';
 import { IconButton } from './IconButton';
 import { Button } from './Button';
+import { authService } from '../../lib/auth';
 
 export const Header: React.FC = () => {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const [isAuthenticated, setIsAuthenticated] = React.useState(false);
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+    setIsAuthenticated(authService.isAuthenticated());
+  }, [pathname]);
 
   const navItems = [
-    { label: 'Overview', href: '/' },
+    { label: 'Overview', href: '/home' },
     { label: 'Live Map', href: '/map', highlight: true },
     { label: 'Intelligence', href: '/intelligence' },
     { label: 'Bookings', href: '/bookings' },
@@ -29,7 +37,7 @@ export const Header: React.FC = () => {
           
           {/* Brand Logo */}
           <div className="flex items-center">
-            <Link href="/" className="flex items-center gap-1.5 group focus:outline-none">
+            <Link href={mounted && isAuthenticated ? "/home" : "/"} className="flex items-center gap-1.5 group focus:outline-none">
               <div className="h-5 w-5 rounded-full bg-signature/10 border border-signature/30 flex items-center justify-center">
                 <div className="h-1.5 w-1.5 rounded-full bg-signature animate-pulse" />
               </div>
@@ -92,30 +100,49 @@ export const Header: React.FC = () => {
               </IconButton>
             </Link>
 
-            {/* Notifications Trigger */}
-            <Link href="/notifications" className="relative block">
-              <IconButton
-                variant="ghost"
-                size="sm"
-                className={`h-8 w-8 ${pathname === '/notifications' ? 'bg-smartSurface border border-smartBorder text-signature' : ''}`}
-                aria-label="View notifications"
-              >
-                <Bell className={`h-3.5 w-3.5 ${pathname === '/notifications' ? 'text-signature' : 'text-smartTextSecondary'}`} />
-              </IconButton>
-              <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-signature ring-1 ring-smartBg" />
-            </Link>
+            {mounted && isAuthenticated ? (
+              <>
+                {/* Notifications Trigger */}
+                <Link href="/notifications" className="relative block">
+                  <IconButton
+                    variant="ghost"
+                    size="sm"
+                    className={`h-8 w-8 ${pathname === '/notifications' ? 'bg-smartSurface border border-smartBorder text-signature' : ''}`}
+                    aria-label="View notifications"
+                  >
+                    <Bell className={`h-3.5 w-3.5 ${pathname === '/notifications' ? 'text-signature' : 'text-smartTextSecondary'}`} />
+                  </IconButton>
+                  <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-signature ring-1 ring-smartBg" />
+                </Link>
 
-            {/* Profile Avatar */}
-            <Link href="/profile">
-              <IconButton
-                variant="ghost"
-                size="sm"
-                className={`h-8 w-8 ${pathname === '/profile' ? 'bg-smartSurface border border-smartBorder text-signature' : ''}`}
-                aria-label="Account profile"
-              >
-                <User className={`h-3.5 w-3.5 ${pathname === '/profile' ? 'text-signature' : 'text-smartTextSecondary'}`} />
-              </IconButton>
-            </Link>
+                {/* Profile Avatar */}
+                <Link href="/profile">
+                  <IconButton
+                    variant="ghost"
+                    size="sm"
+                    className={`h-8 w-8 ${pathname === '/profile' ? 'bg-smartSurface border border-smartBorder text-signature' : ''}`}
+                    aria-label="Account profile"
+                  >
+                    <User className={`h-3.5 w-3.5 ${pathname === '/profile' ? 'text-signature' : 'text-smartTextSecondary'}`} />
+                  </IconButton>
+                </Link>
+              </>
+            ) : mounted ? (
+              <>
+                {/* Login button */}
+                <Link href="/login">
+                  <Button variant="secondary" size="sm" className="h-8 text-[10px] uppercase font-mono px-3">
+                    Login
+                  </Button>
+                </Link>
+                {/* Signup button */}
+                <Link href="/signup" className="hidden sm:inline-flex">
+                  <Button variant="primary" size="sm" className="h-8 text-[10px] uppercase font-mono px-3">
+                    Sign Up
+                  </Button>
+                </Link>
+              </>
+            ) : null}
 
             {/* Mobile Hamburger menu */}
             <IconButton
@@ -203,19 +230,34 @@ export const Header: React.FC = () => {
 
               {/* Mobile Footer Info */}
               <div className="border-t border-smartBorder/40 pt-4 flex flex-col gap-2">
-                <Link
-                  href="/profile"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 p-1.5 rounded-smart hover:bg-smartSurface transition-colors"
-                >
-                  <div className="h-8 w-8 rounded-full bg-smartSurface border border-smartBorder flex items-center justify-center">
-                    <User className="h-3.5 w-3.5 text-signature" />
+                {mounted && isAuthenticated ? (
+                  <Link
+                    href="/profile"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 p-1.5 rounded-smart hover:bg-smartSurface transition-colors"
+                  >
+                    <div className="h-8 w-8 rounded-full bg-smartSurface border border-smartBorder flex items-center justify-center">
+                      <User className="h-3.5 w-3.5 text-signature" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-smartTextPrimary">Pratham</div>
+                      <div className="text-[9px] text-smartTextSecondary">Active Operator Session</div>
+                    </div>
+                  </Link>
+                ) : mounted ? (
+                  <div className="flex gap-2 w-full">
+                    <Link href="/login" onClick={() => setMobileMenuOpen(false)} className="flex-1">
+                      <Button variant="secondary" size="sm" className="w-full text-[10px] uppercase font-mono py-2">
+                        Login
+                      </Button>
+                    </Link>
+                    <Link href="/signup" onClick={() => setMobileMenuOpen(false)} className="flex-1">
+                      <Button variant="primary" size="sm" className="w-full text-[10px] uppercase font-mono py-2">
+                        Sign Up
+                      </Button>
+                    </Link>
                   </div>
-                  <div>
-                    <div className="text-xs font-semibold text-smartTextPrimary">Pratham</div>
-                    <div className="text-[9px] text-smartTextSecondary">Active Operator Session</div>
-                  </div>
-                </Link>
+                ) : null}
                 <div className="text-[9px] font-mono text-smartTextSecondary/60 mt-2">
                   SMARTPARK AI V2.0.0 · USER ACCOUNT
                 </div>

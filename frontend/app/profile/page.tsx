@@ -34,6 +34,8 @@ import { Select } from '../../components/ui/Select';
 import { Modal } from '../../components/ui/Modal';
 import { Toast, ToastType } from '../../components/ui/Toast';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { useRouter } from 'next/navigation';
+import { authService } from '../../lib/auth';
 
 import {
   INITIAL_USER_PROFILE,
@@ -51,12 +53,32 @@ import {
 } from '../../lib/profileData';
 
 export default function ProfilePage() {
+  const router = useRouter();
+  const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
+
   // State management
   const [profile, setProfile] = React.useState<UserProfile>(INITIAL_USER_PROFILE);
   const [preferences, setPreferences] = React.useState<ParkingPreferences>(INITIAL_PREFERENCES);
   const [savedFacilities, setSavedFacilities] = React.useState<SavedParkingFacility[]>(INITIAL_SAVED_PARKING);
   const [recentBookings] = React.useState<BookingSummary[]>(INITIAL_RECENT_BOOKINGS);
   const [notifications, setNotifications] = React.useState<NotificationPreferences>(INITIAL_NOTIFICATIONS);
+
+  React.useEffect(() => {
+    const authed = authService.isAuthenticated();
+    if (!authed) {
+      router.push('/login');
+    } else {
+      setIsAuthenticated(true);
+      const user = authService.getCurrentUser();
+      if (user) {
+        setProfile((prev) => ({
+          ...prev,
+          name: user.name,
+          email: user.email,
+        }));
+      }
+    }
+  }, [router]);
 
   // Modal states
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
@@ -151,6 +173,14 @@ export default function ProfilePage() {
     .map((n) => n[0])
     .join('')
     .toUpperCase();
+
+  if (isAuthenticated === null) {
+    return (
+      <div className="min-h-screen bg-smartBg flex items-center justify-center font-mono text-xs text-smartTextSecondary">
+        Checking authentication...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-smartBg text-smartTextPrimary flex flex-col font-sans pb-16 selection:bg-signature/20 selection:text-signature">
@@ -940,8 +970,12 @@ export default function ProfilePage() {
               size="sm"
               className="bg-occupied hover:bg-occupied/90 border-occupied text-white"
               onClick={() => {
+                authService.logout();
                 setIsLogoutModalOpen(false);
                 showToast('Mock session signed out successfully.', 'info');
+                setTimeout(() => {
+                  router.push('/');
+                }, 1000);
               }}
             >
               Confirm Log Out

@@ -93,7 +93,7 @@ export default function SignUpPage() {
       if (res.success) {
         setIsSuccess(true);
         setTimeout(() => {
-          router.push('/');
+          router.push('/home');
         }, 1200);
       } else {
         setApiError(res.error || 'Account creation failed. Please try again.');
