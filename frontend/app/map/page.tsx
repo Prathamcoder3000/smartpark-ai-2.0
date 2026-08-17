@@ -1051,7 +1051,7 @@ export default function LiveMapPage() {
 
           {/* ── Mobile filter pills ── */}
           <div className="absolute top-[4.5rem] left-4 right-4 z-20 md:hidden">
-            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+            <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
               {MAP_FILTER_OPTIONS.map((opt) => (
                 <button
                   key={opt.id}

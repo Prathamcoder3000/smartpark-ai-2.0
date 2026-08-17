@@ -22,7 +22,7 @@ export const Tabs: React.FC<TabsProps> = ({
   className = '',
 }) => {
   return (
-    <div className={`relative flex border-b border-smartBorder ${className}`} role="tablist">
+    <div className={`relative flex border-b border-smartBorder overflow-x-auto scrollbar-none flex-nowrap ${className}`} role="tablist">
       {tabs.map((tab) => {
         const isActive = tab.id === activeTab;
         return (
@@ -31,7 +31,7 @@ export const Tabs: React.FC<TabsProps> = ({
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(tab.id)}
-            className={`relative py-2.5 px-4 text-sm font-sans font-medium transition-colors select-none focus:outline-none focus-visible:text-smartTextPrimary ${
+            className={`relative py-2.5 px-4 text-sm font-sans font-medium transition-colors select-none focus:outline-none focus-visible:text-smartTextPrimary shrink-0 whitespace-nowrap ${
               isActive ? 'text-smartTextPrimary' : 'text-smartTextSecondary hover:text-smartTextPrimary/80'
             }`}
           >

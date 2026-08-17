@@ -211,7 +211,7 @@ export default function SupportPage() {
                 Filter by Category
               </h3>
               
-              <div className="flex flex-row md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
+              <div className="flex flex-row md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none flex-nowrap">
                 <button
                   type="button"
                   onClick={() => setSelectedCategory('ALL')}

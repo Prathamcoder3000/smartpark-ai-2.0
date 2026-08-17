@@ -470,7 +470,7 @@ export default function FacilityDetailsPage() {
             </div>
 
             {/* Floor switcher */}
-            <div className="flex gap-1 overflow-x-auto pb-1 sm:pb-0">
+            <div className="flex gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none flex-nowrap">
               {facility.floors.map((fl) => (
                 <button
                   key={fl.id}

@@ -833,7 +833,7 @@ export default function OperatorPage() {
           <div className="overflow-x-auto w-full">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-smartBorder/60 text-smartTextSecondary font-semibold uppercase tracking-wider select-none text-[9.5px] font-mono">
+                <tr className="border-b border-smartBorder/60 text-smartTextSecondary font-semibold uppercase tracking-wider select-none text-[9.5px] font-mono whitespace-nowrap">
                   <th className="py-2.5 px-3">Location Facility</th>
                   <th className="py-2.5 px-2 cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('occupancy')}>
                     <div className="flex items-center gap-1">
@@ -863,7 +863,7 @@ export default function OperatorPage() {
                   return (
                     <tr 
                       key={fac.id}
-                      className={`group transition-colors cursor-pointer text-[11px] ${
+                      className={`group transition-colors cursor-pointer text-[11px] whitespace-nowrap ${
                         isSelected 
                           ? 'bg-signature/5 font-semibold border-l-2 border-signature' 
                           : 'hover:bg-smartElevated/35'
