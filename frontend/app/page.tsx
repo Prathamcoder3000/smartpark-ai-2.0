@@ -247,7 +247,7 @@ export default function LandingPage() {
         </div>
 
         {/* Spatial Hero Visualization */}
-        <div className="mt-16 max-w-5xl mx-auto relative rounded-smart bg-gradient-to-b from-smartSurface to-smartBg border border-smartBorder/80 p-1 sm:p-2 shadow-2xl">
+        <div className="mt-12 max-w-5xl mx-auto relative rounded-smart bg-gradient-to-b from-smartSurface to-smartBg border border-smartBorder/80 p-1 sm:p-2 shadow-2xl">
           <div className="rounded-smart bg-smartBg p-4 sm:p-6 text-left">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between border-b border-smartBorder/55 pb-4 mb-6 gap-4">
               <div>

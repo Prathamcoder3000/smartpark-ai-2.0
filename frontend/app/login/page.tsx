@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff, Lock, Mail, ArrowRight, CheckCircle2, ShieldCheck, Cpu, AlertCircle } from 'lucide-react';
-import { Header } from '../../components/ui/Header';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -95,8 +94,34 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-smartBg text-smartTextPrimary flex flex-col justify-between selection:bg-signature selection:text-smartBg relative overflow-x-hidden">
-      {/* SmartPark Navigation Header */}
-      <Header />
+      {/* Simplified Public Authentication Header */}
+      <div className="w-full fixed top-4 left-0 right-0 z-50 px-4 sm:px-6 lg:px-8 pointer-events-none select-none">
+        <header className="mx-auto max-w-5xl w-full bg-smartBg/75 backdrop-blur-xl border border-smartBorder rounded-full pointer-events-auto shadow-2xl h-12 flex items-center justify-between px-4 sm:px-6">
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-1.5 group focus:outline-none">
+            <div className="h-5 w-5 rounded-full bg-signature/10 border border-signature/30 flex items-center justify-center">
+              <div className="h-1.5 w-1.5 rounded-full bg-signature" />
+            </div>
+            <span className="font-display text-xs font-semibold uppercase tracking-wider text-smartTextPrimary group-hover:text-white transition-colors">
+              SmartPark<span className="text-signature">.</span>AI
+            </span>
+          </Link>
+          
+          {/* Opposite Auth Trigger & Back Link */}
+          <div className="flex items-center gap-4">
+            <Link href="/" className="text-[10px] uppercase font-mono font-bold tracking-wider text-smartTextSecondary hover:text-smartTextPrimary transition-colors">
+              Back to Home
+            </Link>
+            <Link href="/signup">
+              <Button variant="primary" size="sm" className="h-8 text-[10px] uppercase font-mono px-3">
+                Sign Up
+              </Button>
+            </Link>
+          </div>
+        </header>
+      </div>
+
+      <div className="h-20" />
 
       {/* Main Authentication Console */}
       <main className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8 relative">
@@ -182,6 +207,7 @@ export default function LoginPage() {
                         required
                         autoComplete="email"
                         disabled={isLoading}
+                        className="bg-smartBg border-smartBorder focus:border-signature/80 focus:ring-1 focus:ring-signature/40 text-smartTextPrimary"
                       />
                     </div>
 
@@ -208,10 +234,10 @@ export default function LoginPage() {
                           required
                           disabled={isLoading}
                           autoComplete="current-password"
-                          className={`w-full h-9 bg-smartSurface border ${
+                          className={`w-full h-9 bg-smartBg border ${
                             errors.password
                               ? 'border-occupied/50 focus:border-occupied/80'
-                              : 'border-smartBorder focus:border-signature/60'
+                              : 'border-smartBorder focus:border-signature/80 focus:ring-1 focus:ring-signature/40'
                           } rounded-smart pl-3 pr-10 text-sm font-sans text-smartTextPrimary placeholder:text-smartTextSecondary/45 outline-none transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed`}
                         />
                         <button
@@ -275,7 +301,7 @@ export default function LoginPage() {
                       <button
                         type="button"
                         onClick={() => handleSocialLogin('Google')}
-                        className="h-9 rounded bg-[#181D21] border border-smartBorder hover:border-signature/40 hover:text-white transition-colors duration-150 flex items-center justify-center gap-1 text-[10px] text-smartTextSecondary font-mono font-semibold"
+                        className="h-9 rounded bg-[#181D21] border border-smartBorder hover:border-signature/40 hover:text-white transition-colors duration-150 flex items-center justify-center gap-1.5 text-xs text-smartTextSecondary font-sans font-semibold"
                       >
                         <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.114-5.136 4.114-3.535 0-6.4-2.865-6.4-6.4s2.865-6.4 6.4-6.4c1.782 0 3.32.732 4.474 1.92l3.178-3.178C19.49 2.215 16.037 1 12.24 1 5.756 1 .5 6.256.5 12.75s5.256 11.75 11.74 11.75c7.34 0 11.66-5.16 11.66-11.75 0-.79-.07-1.397-.22-1.965H12.24z"/>
@@ -285,7 +311,7 @@ export default function LoginPage() {
                       <button
                         type="button"
                         onClick={() => handleSocialLogin('Apple')}
-                        className="h-9 rounded bg-[#181D21] border border-smartBorder hover:border-signature/40 hover:text-white transition-colors duration-150 flex items-center justify-center gap-1 text-[10px] text-smartTextSecondary font-mono font-semibold"
+                        className="h-9 rounded bg-[#181D21] border border-smartBorder hover:border-signature/40 hover:text-white transition-colors duration-150 flex items-center justify-center gap-1.5 text-xs text-smartTextSecondary font-sans font-semibold"
                       >
                         <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 4.17c.66-.81 1.11-1.93.99-3.06-1 .04-2.21.67-2.93 1.49-.62.69-1.16 1.84-1.01 2.96 1.12.09 2.27-.58 2.95-1.39z"/>
@@ -295,12 +321,12 @@ export default function LoginPage() {
                       <button
                         type="button"
                         onClick={() => handleSocialLogin('Microsoft')}
-                        className="h-9 rounded bg-[#181D21] border border-smartBorder hover:border-signature/40 hover:text-white transition-colors duration-150 flex items-center justify-center gap-1 text-[10px] text-smartTextSecondary font-mono font-semibold"
+                        className="h-9 rounded bg-[#181D21] border border-smartBorder hover:border-signature/40 hover:text-white transition-colors duration-150 flex items-center justify-center gap-1.5 text-xs text-smartTextSecondary font-sans font-semibold"
                       >
                         <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M0 0h11v11H0zM12 0h11v11H12zM0 12h11v11H0zM12 12h11v11H12z"/>
                         </svg>
-                        MSFT
+                        Microsoft
                       </button>
                     </div>
                   </form>
@@ -336,7 +362,7 @@ export default function LoginPage() {
           {/* Right Column: Premium Desktop Visual Panel */}
           <div className="hidden lg:block lg:col-span-6 space-y-6 pl-8">
             <Card variant="elevated" className="border-signature/20 bg-smartSurface/80 backdrop-blur-md p-8 relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-6 opacity-[0.03] pointer-events-none">
+              <div className="absolute top-0 right-0 p-6 opacity-[0.012] pointer-events-none">
                 <Cpu className="h-48 w-48 text-signature" />
               </div>
               
