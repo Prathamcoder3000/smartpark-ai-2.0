@@ -56,6 +56,9 @@ export default function ReservePage() {
   const initialSlotId = searchParams?.get('slot') || '';
   const initialFloorId = searchParams?.get('floor') || '';
 
+  // Invalid parameter safety
+  const [isInvalidParam, setIsInvalidParam] = React.useState(false);
+
   // Vehicle list state (local session storage/state)
   const [vehicles, setVehicles] = React.useState<VehicleOption[]>(INITIAL_VEHICLE_OPTIONS);
   const [addVehicleModalOpen, setAddVehicleModalOpen] = React.useState(false);
@@ -103,15 +106,12 @@ export default function ReservePage() {
       );
       if (match) {
         setSelectedFacilityId(match.id);
+        setIsInvalidParam(false);
         if (match.floors.length > 0) {
           setActiveFloorTab(initialFloorId || match.floors[0].id);
         }
       } else {
-        if (MOCK_FACILITY_DETAILS.length > 0) {
-          setSelectedFacilityId(MOCK_FACILITY_DETAILS[0].id);
-          setActiveFloorTab(MOCK_FACILITY_DETAILS[0].floors[0].id);
-        }
-        triggerToast('Requested facility not found. Defaulting to Central Plaza.', 'warning');
+        setIsInvalidParam(true);
       }
     } else if (MOCK_FACILITY_DETAILS.length > 0) {
       setSelectedFacilityId(MOCK_FACILITY_DETAILS[0].id);
@@ -310,6 +310,37 @@ export default function ReservePage() {
       triggerToast('Session storage unavailable. Unable to save reservation.', 'error');
     }
   };
+
+  if (isInvalidParam) {
+    return (
+      <div className="min-h-screen bg-smartBg text-smartTextPrimary flex flex-col font-sans pb-20 selection:bg-signature/20 selection:text-signature">
+        <Header />
+        <main className="flex-1 mx-auto max-w-xl w-full px-4 flex flex-col items-center justify-center text-center pt-20">
+          <div className="h-16 w-16 rounded-full bg-limited/10 border border-limited/30 flex items-center justify-center mb-6 text-limited animate-pulse">
+            <AlertTriangle className="h-8 w-8" />
+          </div>
+          <h1 className="text-xl font-bold font-display uppercase tracking-wider text-white mb-2">
+            Facility Not Found
+          </h1>
+          <p className="text-xs text-smartTextSecondary max-w-md mb-6 leading-relaxed">
+            The requested parking facility identifier "{initialFacilitySlug}" does not match any registered nodes in the SmartPark AI network.
+          </p>
+          <div className="flex gap-3">
+            <Link href="/search">
+              <Button variant="primary" size="sm" className="font-mono text-xs uppercase px-4">
+                Search Facilities
+              </Button>
+            </Link>
+            <Link href="/home">
+              <Button variant="secondary" size="sm" className="font-mono text-xs uppercase px-4">
+                Dashboard
+              </Button>
+            </Link>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-smartBg text-smartTextPrimary flex flex-col font-sans pb-20 selection:bg-signature/20 selection:text-signature">
