@@ -43,14 +43,109 @@ import {
   FacilitySlot
 } from '../../../lib/facilityData';
 
+const mapIdToBackend = (idOrSlug: string): string => {
+  const normalized = idOrSlug.toLowerCase();
+  if (normalized === 'fac-01' || normalized === 'metro-central-garage' || normalized === 'facility-metro-central') {
+    return 'facility-metro-central';
+  }
+  if (normalized === 'fac-02' || normalized === 'cyber-city-hub' || normalized === 'facility-cyber-city') {
+    return 'facility-cyber-city';
+  }
+  if (normalized === 'fac-03' || normalized === 'techpark-parking' || normalized === 'facility-techpark') {
+    return 'facility-techpark';
+  }
+  if (normalized === 'fac-04' || normalized === 'financial-plaza-deck' || normalized === 'facility-financial-plaza') {
+    return 'facility-financial-plaza';
+  }
+  return idOrSlug;
+};
+
+const mapIdToFrontend = (backendId: string): string => {
+  if (backendId === 'facility-metro-central') return 'fac-01';
+  if (backendId === 'facility-cyber-city') return 'fac-02';
+  if (backendId === 'facility-techpark') return 'fac-03';
+  if (backendId === 'facility-financial-plaza') return 'fac-04';
+  return backendId;
+};
+
 export default function FacilityDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const facilityId = params?.id as string;
 
-  // Resolve Facility Data
-  const facility = React.useMemo(() => {
-    return getFacilityByIdOrSlug(facilityId);
+  const [facility, setFacility] = React.useState<any | null>(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    async function load() {
+      try {
+        setLoading(true);
+        const res = await fetch(`http://localhost:8001/api/facilities`);
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data)) {
+          const matchedApi = json.data.find((f: any) => f.id === mapIdToBackend(facilityId) || mapIdToFrontend(f.id) === facilityId);
+          if (matchedApi) {
+            const template = MOCK_FACILITY_DETAILS.find((m) => mapIdToBackend(m.id) === matchedApi.id) || MOCK_FACILITY_DETAILS[0];
+            
+            const floors = template.floors.map(floorTemplate => {
+              const apiFloor = matchedApi.floors?.find((fl: any) => fl.level === floorTemplate.id) || {};
+              const slots = (apiFloor.slots || []).map((s: any) => ({
+                id: s.id,
+                state: s.status as ParkingSlotState,
+                isEV: s.isEVCharging,
+                isDisabled: s.status === 'DISABLED'
+              }));
+              
+              const totalBays = slots.length;
+              const availableBays = slots.filter((s: any) => s.state === 'AVAILABLE').length;
+              const occupiedBays = slots.filter((s: any) => s.state === 'OCCUPIED').length;
+              const reservedBays = slots.filter((s: any) => s.state === 'RESERVED').length;
+
+              return {
+                ...floorTemplate,
+                slots: slots.length > 0 ? slots : floorTemplate.slots,
+                totalBays: slots.length > 0 ? totalBays : floorTemplate.totalBays,
+                availableBays: slots.length > 0 ? availableBays : floorTemplate.availableBays,
+                occupiedBays: slots.length > 0 ? occupiedBays : floorTemplate.occupiedBays,
+                reservedBays: slots.length > 0 ? reservedBays : floorTemplate.reservedBays
+              };
+            });
+
+            setFacility({
+              ...template,
+              id: mapIdToFrontend(matchedApi.id),
+              name: matchedApi.name,
+              availableBays: matchedApi.availableSlots,
+              totalBays: matchedApi.totalCapacity,
+              occupiedBays: matchedApi.totalCapacity - matchedApi.availableSlots,
+              occupancyPct: matchedApi.occupancyPercentage,
+              status: matchedApi.availableSlots > 0 ? 'AVAILABLE' : 'LIMITED',
+              floors
+            });
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+
+    let eventSource: EventSource | null = null;
+    try {
+      const backendId = mapIdToBackend(facilityId);
+      eventSource = new EventSource(`http://localhost:8001/api/realtime/facilities/${backendId}`);
+      eventSource.onmessage = () => {
+        load();
+      };
+    } catch (e) {
+      console.warn('Realtime updates offline');
+    }
+
+    return () => {
+      eventSource?.close();
+    };
   }, [facilityId]);
 
   const reviewsSummary = React.useMemo(() => {
@@ -70,7 +165,7 @@ export default function FacilityDetailsPage() {
   // Selected Floor object
   const activeFloor = React.useMemo(() => {
     if (!facility) return null;
-    return facility.floors.find((f) => f.id === activeFloorTab) || facility.floors[0];
+    return facility.floors.find((f: any) => f.id === activeFloorTab) || facility.floors[0];
   }, [facility, activeFloorTab]);
 
   // Slot Click state
@@ -163,7 +258,7 @@ export default function FacilityDetailsPage() {
               <div className="text-[10px] font-mono text-smartTextSecondary text-right hidden sm:block">
                 {facility.updatedAt}
               </div>
-              <span className={`text-xs font-mono font-bold px-3 py-1 rounded border uppercase tracking-wider ${statusColors[facility.status]}`}>
+              <span className={`text-xs font-mono font-bold px-3 py-1 rounded border uppercase tracking-wider ${statusColors[facility.status as ParkingStatusType]}`}>
                 {facility.status}
               </span>
             </div>
@@ -348,7 +443,7 @@ export default function FacilityDetailsPage() {
 
               {/* Reason list */}
               <div className="space-y-2 pt-2 border-t border-smartBorder/45">
-                {facility.recommendation.reasons.map((reason, idx) => (
+                {facility.recommendation.reasons.map((reason: any, idx: number) => (
                   <div key={idx} className="flex items-start gap-2 text-xs font-sans text-smartTextPrimary">
                     <Check className="h-3.5 w-3.5 text-signature shrink-0 mt-0.5" />
                     <span>{reason}</span>
@@ -379,7 +474,7 @@ export default function FacilityDetailsPage() {
             </div>
 
             <div className="space-y-2 font-mono text-xs">
-              {facility.forecast.map((fc, i) => (
+              {facility.forecast.map((fc: any, i: number) => (
                 <div
                   key={i}
                   className={`flex items-center justify-between p-2 rounded border transition-colors ${
@@ -471,7 +566,7 @@ export default function FacilityDetailsPage() {
 
             {/* Floor switcher */}
             <div className="flex gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none flex-nowrap">
-              {facility.floors.map((fl) => (
+              {facility.floors.map((fl: any) => (
                 <button
                   key={fl.id}
                   type="button"
@@ -518,7 +613,7 @@ export default function FacilityDetailsPage() {
 
               {/* Slot Representative Grid */}
               <div className="flex flex-wrap gap-3 justify-center py-4 bg-smartBg/60 border border-dashed border-smartBorder/70 rounded-smart">
-                {activeFloor.slots.map((slot) => (
+                {activeFloor.slots.map((slot: any) => (
                   <div key={slot.id} className="relative group">
                     <ParkingSlot
                       id={slot.id.split('-').pop() || slot.id}
@@ -551,7 +646,7 @@ export default function FacilityDetailsPage() {
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              {facility.amenities.map((amenity, idx) => (
+              {facility.amenities.map((amenity: any, idx: number) => (
                 <div key={idx} className="p-3 bg-smartSurface/50 border border-smartBorder/45 rounded-smart flex gap-2">
                   <div className="h-6 w-6 rounded-full bg-signature/10 border border-signature/30 flex items-center justify-center text-signature shrink-0">
                     <Check className="h-3 w-3" />
@@ -579,7 +674,7 @@ export default function FacilityDetailsPage() {
             </div>
 
             <div className="divide-y divide-smartBorder/45">
-              {facility.rates.map((rate, idx) => (
+              {facility.rates.map((rate: any, idx: number) => (
                 <div key={idx} className="py-2.5 flex items-center justify-between text-xs font-sans">
                   <div>
                     <span className="font-semibold text-smartTextPrimary block">{rate.name}</span>
@@ -690,7 +785,7 @@ export default function FacilityDetailsPage() {
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {relatedFacilities.map((near) => (
+            {relatedFacilities.map((near: any) => (
               <Card
                 key={near.id}
                 variant="default"

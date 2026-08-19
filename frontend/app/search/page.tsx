@@ -43,6 +43,31 @@ import {
   SearchSuggestion,
 } from '../../lib/searchData';
 
+const mapIdToBackend = (idOrSlug: string): string => {
+  const normalized = idOrSlug.toLowerCase();
+  if (normalized === 'fac-01' || normalized === 'metro-central-garage' || normalized === 'facility-metro-central') {
+    return 'facility-metro-central';
+  }
+  if (normalized === 'fac-02' || normalized === 'cyber-city-hub' || normalized === 'facility-cyber-city') {
+    return 'facility-cyber-city';
+  }
+  if (normalized === 'fac-03' || normalized === 'techpark-parking' || normalized === 'facility-techpark') {
+    return 'facility-techpark';
+  }
+  if (normalized === 'fac-04' || normalized === 'financial-plaza-deck' || normalized === 'facility-financial-plaza') {
+    return 'facility-financial-plaza';
+  }
+  return idOrSlug;
+};
+
+const mapIdToFrontend = (backendId: string): string => {
+  if (backendId === 'facility-metro-central') return 'fac-01';
+  if (backendId === 'facility-cyber-city') return 'fac-02';
+  if (backendId === 'facility-techpark') return 'fac-03';
+  if (backendId === 'facility-financial-plaza') return 'fac-04';
+  return backendId;
+};
+
 export default function SearchPage() {
   // Search query & suggestion states
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -111,9 +136,38 @@ export default function SearchPage() {
     );
   }, [searchQuery]);
 
+  const [facilitiesList, setFacilitiesList] = React.useState<SearchFacility[]>(MOCK_SEARCH_FACILITIES);
+
+  React.useEffect(() => {
+    async function load() {
+      try {
+        const response = await fetch('http://localhost:8001/api/facilities');
+        const json = await response.json();
+        if (json.success && Array.isArray(json.data)) {
+          const mapped = json.data.map((f: any) => {
+            const template = MOCK_SEARCH_FACILITIES.find(m => mapIdToBackend(m.id) === f.id) || MOCK_SEARCH_FACILITIES[0];
+            return {
+              ...template,
+              id: mapIdToFrontend(f.id),
+              name: f.name,
+              availableBays: f.availableSlots,
+              totalBays: f.totalCapacity,
+              occupancyPct: f.occupancyPercentage,
+              status: f.availableSlots > 0 ? 'AVAILABLE' : 'LIMITED'
+            };
+          });
+          setFacilitiesList(mapped);
+        }
+      } catch (err) {
+        console.error('Failed to load search facilities from backend:', err);
+      }
+    }
+    load();
+  }, []);
+
   // Filtered & Sorted Facilities
   const processedFacilities = React.useMemo(() => {
-    let result = [...MOCK_SEARCH_FACILITIES];
+    let result = [...facilitiesList];
 
     // Search query text filter
     if (searchQuery.trim()) {

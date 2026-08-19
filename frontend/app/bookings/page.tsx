@@ -33,63 +33,16 @@ import { MetricCard } from '../../components/ui/MetricCard';
 import { Modal } from '../../components/ui/Modal';
 import { Toast } from '../../components/ui/Toast';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { MOCK_BOOKINGS, Booking, BookingStatus } from '../../lib/bookingsData';
+import { Booking, BookingStatus } from '../../lib/bookingsData';
 import { useRouter } from 'next/navigation';
 import { authService } from '../../lib/auth';
+import { api } from '../../lib/api';
 
 export default function BookingsPage() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
-
-  // --- States ---
-  const [bookings, setBookings] = React.useState<Booking[]>(MOCK_BOOKINGS);
-
-  React.useEffect(() => {
-    const authed = authService.isAuthenticated();
-    if (!authed) {
-      router.push('/login');
-    } else {
-      setIsAuthenticated(true);
-    }
-  }, [router]);
-
-  React.useEffect(() => {
-    try {
-      const stored = sessionStorage.getItem('smartpark_prototype_reservation');
-      if (stored) {
-        const protoRes = JSON.parse(stored);
-        const startHour = parseInt(protoRes.selection.startTime.split(':')[0]) || 9;
-        const durationHours = parseInt(protoRes.selection.duration) || 2;
-        const endTimeStr = `${(startHour + durationHours).toString().padStart(2, '0')}:00`;
-
-        const mappedBooking: Booking = {
-          id: protoRes.reference,
-          facilityName: protoRes.facility.name,
-          facilityAddress: protoRes.facility.address,
-          date: protoRes.selection.date,
-          startTime: protoRes.selection.startTime,
-          endTime: endTimeStr,
-          slotNumber: protoRes.selection.slotId.split('-').pop() || protoRes.selection.slotId,
-          floor: protoRes.floorLabel,
-          vehicle: protoRes.selection.vehicleId.startsWith('veh-1') ? 'MH-01-DR-4829 (Honda City)' : 'MH-01-EE-9021 (Nexon EV)',
-          amount: protoRes.pricing.totalAmount,
-          bookingStatus: 'UPCOMING',
-          bookingReference: protoRes.reference,
-          distanceKm: protoRes.facility.distanceKm,
-          walkMinutes: protoRes.facility.walkingEta,
-          amenities: protoRes.facility.hasEv ? ['EV Charging', 'Covered Parking'] : ['Covered Parking'],
-          createdDate: protoRes.createdAt
-        };
-
-        setBookings((prev) => {
-          if (prev.some((b) => b.id === mappedBooking.id)) return prev;
-          return [mappedBooking, ...prev];
-        });
-      }
-    } catch (e) {
-      console.error('Failed to load prototype booking', e);
-    }
-  }, []);
+  const [bookings, setBookings] = React.useState<Booking[]>([]);
+  const [loading, setLoading] = React.useState<boolean>(true);
 
   const [activeFilter, setActiveFilter] = React.useState<string>('ALL');
   const [selectedBookingDetails, setSelectedBookingDetails] = React.useState<Booking | null>(null);
@@ -107,24 +60,88 @@ export default function BookingsPage() {
     setToastOpen(true);
   };
 
+  const mapBookingToFrontend = (b: any): Booking => {
+    const isCheckedIn = !!b.entryTime;
+    
+    let bookingStatus: BookingStatus = 'UPCOMING';
+    if (b.status === 'COMPLETED') {
+      bookingStatus = 'COMPLETED';
+    } else if (b.status === 'CANCELLED') {
+      bookingStatus = 'CANCELLED';
+    } else if (b.status === 'ACTIVE') {
+      bookingStatus = isCheckedIn ? 'ACTIVE' : 'UPCOMING';
+    }
+
+    const startD = b.reservation?.startTime ? new Date(b.reservation.startTime) : new Date(b.createdAt);
+    const endD = b.reservation?.endTime ? new Date(b.reservation.endTime) : new Date(b.createdAt);
+
+    const dateStr = startD.toISOString().split('T')[0];
+    const startTimeStr = startD.toTimeString().split(' ')[0].substring(0, 5);
+    const endTimeStr = endD.toTimeString().split(' ')[0].substring(0, 5);
+
+    return {
+      id: b.id,
+      facilityName: b.facility?.name || 'SmartPark Facility',
+      facilityAddress: b.facility?.address || 'Near Downtown',
+      date: dateStr,
+      startTime: startTimeStr,
+      endTime: endTimeStr,
+      slotNumber: b.slot?.slotNumber || 'A-101',
+      floor: b.slot?.floor?.name || 'Level 1',
+      vehicle: b.reservation?.vehicle 
+        ? `${b.reservation.vehicle.licensePlate} (${b.reservation.vehicle.make} ${b.reservation.vehicle.model})`
+        : 'No vehicle associated',
+      amount: b.finalAmount || b.reservation?.price || 5.00,
+      bookingStatus,
+      bookingReference: b.id.substring(0, 8).toUpperCase(),
+      distanceKm: 0.5,
+      walkMinutes: 5,
+      amenities: b.slot?.isEVCharging ? ['EV Fast Charger', 'CCTV 24/7', 'Covered Deck'] : ['CCTV 24/7', 'Covered Deck'],
+      createdDate: new Date(b.createdAt).toLocaleString()
+    };
+  };
+
+  const loadBookings = React.useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/api/bookings');
+      if (res.success && Array.isArray(res.data)) {
+        setBookings(res.data.map(mapBookingToFrontend));
+      }
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || 'Failed to load bookings.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    const authed = authService.isAuthenticated();
+    if (!authed) {
+      router.push('/login');
+    } else {
+      setIsAuthenticated(true);
+      loadBookings();
+    }
+  }, [router, loadBookings]);
+
   // Find the primary booking for the Pass (Upcoming or Active)
   const primaryPassBooking = React.useMemo(() => {
-    if (focusedPassBooking) return focusedPassBooking;
-    // Prefer ACTIVE then UPCOMING
+    if (focusedPassBooking) {
+      // Find updated booking in the list
+      return bookings.find(b => b.id === focusedPassBooking.id) || focusedPassBooking;
+    }
     const active = bookings.find(b => b.bookingStatus === 'ACTIVE');
     if (active) return active;
     return bookings.find(b => b.bookingStatus === 'UPCOMING') || null;
   }, [bookings, focusedPassBooking]);
 
-  // Calculations for Metrics from current state
   const metrics = React.useMemo(() => {
     const upcoming = bookings.filter(b => b.bookingStatus === 'UPCOMING').length;
     const completed = bookings.filter(b => b.bookingStatus === 'COMPLETED').length;
-    
-    // Estimate hours (we default to hours difference, or hardcode a sum for the mock)
-    // book-03: 8 hours, book-04: 4 hours = 12 total.
     const completedBookings = bookings.filter(b => b.bookingStatus === 'COMPLETED');
-    const parkingHours = completedBookings.length * 5; // average mock duration
+    const parkingHours = completedBookings.length * 2; // Simulated hours
     const totalSpent = completedBookings.reduce((sum, b) => sum + b.amount, 0);
 
     return {
@@ -141,31 +158,49 @@ export default function BookingsPage() {
     return bookings.filter(b => b.bookingStatus === activeFilter);
   }, [bookings, activeFilter]);
 
-  // Cancel reservation callback
-  const handleCancelBooking = () => {
-    if (!bookingToCancel) return;
-
-    // Update bookingStatus in local state
-    setBookings(prev => prev.map(b => {
-      if (b.id === bookingToCancel.id) {
-        return { ...b, bookingStatus: 'CANCELLED' };
+  // Check In Handler
+  const handleCheckIn = async (bookingId: string) => {
+    try {
+      const res = await api.post(`/api/bookings/${bookingId}/check-in`);
+      if (res.success) {
+        showToast('Successfully checked in! Physical gate opened.', 'success');
+        await loadBookings();
       }
-      return b;
-    }));
-
-    // If cancelling the focused pass, reset it
-    if (focusedPassBooking?.id === bookingToCancel.id) {
-      setFocusedPassBooking(null);
+    } catch (err: any) {
+      showToast(err.message || 'Check-in failed.', 'error');
     }
-
-    showToast(`Reservation ${bookingToCancel.bookingReference} cancelled in prototype mode.`, 'success');
-    setBookingToCancel(null);
   };
 
-  // Focus pass helper
+  // Check Out Handler
+  const handleCheckOut = async (bookingId: string) => {
+    try {
+      const res = await api.post(`/api/bookings/${bookingId}/check-out`);
+      if (res.success) {
+        showToast(`Successfully checked out! Charged: ₹${res.data.finalAmount}.`, 'success');
+        await loadBookings();
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Check-out failed.', 'error');
+    }
+  };
+
+  // Cancel reservation callback
+  const handleCancelBooking = async () => {
+    if (!bookingToCancel) return;
+    try {
+      const res = await api.post(`/api/bookings/${bookingToCancel.id}/cancel`);
+      if (res.success) {
+        showToast(`Booking ${bookingToCancel.bookingReference} cancelled successfully.`, 'success');
+        setBookingToCancel(null);
+        await loadBookings();
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Cancellation failed.', 'error');
+    }
+  };
+
   const handleFocusPass = (booking: Booking) => {
     setFocusedPassBooking(booking);
-    // Scroll pass into view on mobile if needed
     const passElement = document.getElementById('digital-pass-card');
     passElement?.scrollIntoView({ behavior: 'smooth' });
     showToast(`Loaded digital pass for ${booking.facilityName}`, 'info');
@@ -185,9 +220,7 @@ export default function BookingsPage() {
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 flex flex-col gap-6">
 
-        {/* ==================================================
-            1. PAGE HEADER
-           ================================================== */}
+        {/* 1. PAGE HEADER */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-smartBorder/40 pb-5">
           <div>
             <h1 className="text-2xl sm:text-3xl font-display font-bold uppercase tracking-tight text-white">
@@ -208,9 +241,7 @@ export default function BookingsPage() {
           </div>
         </div>
 
-        {/* ==================================================
-            2. BOOKINGS SUMMARY METRICS
-           ================================================== */}
+        {/* 2. BOOKINGS SUMMARY METRICS */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <MetricCard 
             label="Upcoming Reservations"
@@ -228,15 +259,13 @@ export default function BookingsPage() {
             trend={{ value: 'Estimated duration', direction: 'neutral' }}
           />
           <MetricCard 
-            label="Total Spent (Proto)"
+            label="Total Spent (Real)"
             value={`₹${metrics.totalSpent}`}
             trend={{ value: 'Processed via account', direction: 'neutral' }}
           />
         </div>
 
-        {/* ==================================================
-            3. TWO-COLUMN: DIGITAL PASS vs INSIGHTS
-           ================================================== */}
+        {/* 3. TWO-COLUMN: DIGITAL PASS vs INSIGHTS */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* Left / Center 2 Columns: Digital Parking Pass Card */}
@@ -248,7 +277,6 @@ export default function BookingsPage() {
             {primaryPassBooking ? (
               <div id="digital-pass-card" className="relative overflow-hidden bg-gradient-to-br from-smartSurface to-smartElevated border border-signature/20 rounded-smart-lg p-6 flex flex-col md:flex-row justify-between gap-6 shadow-xl">
                 
-                {/* Visual Pass Overlay lines */}
                 <div className="absolute top-0 right-0 h-32 w-32 bg-signature/5 blur-2xl rounded-full pointer-events-none" />
                 <div className="absolute bottom-0 left-0 h-24 w-24 bg-aiBlue/5 blur-2xl rounded-full pointer-events-none" />
 
@@ -261,7 +289,7 @@ export default function BookingsPage() {
                           ? 'text-signature border-signature/30 bg-signature/10' 
                           : 'text-aiBlue border-aiBlue/30 bg-aiBlue/10'
                       }`}>
-                        {primaryPassBooking.bookingStatus === 'ACTIVE' ? 'ACTIVE PERMIT' : 'UPCOMING RESERVATION'}
+                        {primaryPassBooking.bookingStatus === 'ACTIVE' ? 'ACTIVE PERMIT (PARKED)' : 'UPCOMING RESERVATION (PERMIT READY)'}
                       </span>
                       <span className="text-[10px] font-mono text-smartTextSecondary">
                         REF: {primaryPassBooking.bookingReference}
@@ -295,12 +323,28 @@ export default function BookingsPage() {
                   </div>
 
                   <div className="flex flex-wrap gap-2 pt-1.5">
-                    <Link href="/map">
-                      <Button variant="primary" size="sm" className="text-[10.5px] uppercase tracking-wider font-semibold">
-                        <Map className="h-3 w-3 mr-1" />
-                        View Route
+                    {/* Live Check-in / Check-out dynamic triggers */}
+                    {primaryPassBooking.bookingStatus === 'UPCOMING' && (
+                      <Button 
+                        variant="primary" 
+                        size="sm" 
+                        className="text-[10.5px] uppercase tracking-wider font-semibold bg-available hover:bg-available/85 text-black border-transparent"
+                        onClick={() => handleCheckIn(primaryPassBooking.id)}
+                      >
+                        Check In Now
                       </Button>
-                    </Link>
+                    )}
+                    {primaryPassBooking.bookingStatus === 'ACTIVE' && (
+                      <Button 
+                        variant="primary" 
+                        size="sm" 
+                        className="text-[10.5px] uppercase tracking-wider font-semibold bg-occupied hover:bg-occupied/85 text-white border-transparent"
+                        onClick={() => handleCheckOut(primaryPassBooking.id)}
+                      >
+                        Check Out
+                      </Button>
+                    )}
+                    
                     <Button 
                       variant="secondary" 
                       size="sm" 
@@ -309,6 +353,7 @@ export default function BookingsPage() {
                     >
                       Permit details
                     </Button>
+
                     {primaryPassBooking.bookingStatus === 'UPCOMING' && (
                       <Button 
                         variant="ghost" 
@@ -316,24 +361,23 @@ export default function BookingsPage() {
                         className="text-[10.5px] uppercase tracking-wider font-semibold text-occupied hover:bg-occupied/10 border border-transparent hover:border-occupied/20"
                         onClick={() => setBookingToCancel(primaryPassBooking)}
                       >
-                        Cancel Reservation
+                        Cancel Booking
                       </Button>
                     )}
                   </div>
                 </div>
 
-                {/* Right Side: QR Pattern Code Placeholder */}
+                {/* Right Side: QR Pattern Code */}
                 <div className="w-full md:w-44 flex flex-col items-center justify-center bg-smartBg/70 border border-smartBorder/60 p-4 rounded-xl relative z-10">
                   <div className="h-28 w-28 border-2 border-dashed border-smartBorder/95 flex items-center justify-center bg-smartSurface relative rounded p-2">
                     <QrCode className="h-20 w-20 text-smartTextPrimary opacity-80" />
-                    {/* Simulated scanning indicator line */}
                     <div className="absolute top-1/2 left-2 right-2 h-0.5 bg-signature/60 shadow-lg animate-pulse" />
                   </div>
                   <span className="text-[9px] font-mono text-smartTextSecondary mt-3 tracking-wider text-center">
                     SHOW PASS AT BARRIER
                   </span>
                   <span className="text-[8px] font-mono text-smartTextSecondary/60 mt-1 text-center">
-                    Digital preview (simulation)
+                    Live Real-time Permit
                   </span>
                 </div>
 
@@ -351,302 +395,179 @@ export default function BookingsPage() {
             )}
           </div>
 
-          {/* Right Column: SmartPark Booking Insight Panel */}
-          <div className="lg:col-span-1 flex flex-col gap-4">
+          {/* Right Column: AI Intel */}
+          <div className="flex flex-col gap-4">
             <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-smartTextSecondary">
-              Reservations Assistant
+              AI Parking Intelligence
             </h3>
-
-            <Card variant="default" className="flex flex-col gap-4 h-full justify-between">
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-1.5 text-signature">
+            
+            <Card className="flex-1 flex flex-col gap-4 justify-between">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded bg-signature/10 text-signature shrink-0">
                   <Sparkles className="h-4 w-4" />
-                  <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider">
-                    SmartPark Assistant
-                  </span>
                 </div>
-                
-                {primaryPassBooking ? (
-                  <div className="flex flex-col gap-2">
-                    <p className="text-xs text-smartTextSecondary leading-relaxed">
-                      Your upcoming bay assignment <span className="text-white font-semibold">{primaryPassBooking.slotNumber}</span> at {primaryPassBooking.facilityName} is in a zone with <span className="text-available font-semibold">stable predicted availability</span>.
-                    </p>
-                    <div className="text-[10px] font-mono text-smartTextSecondary/80 bg-smartBg/65 border border-smartBorder/45 p-2 rounded leading-relaxed">
-                      AI recommendation confidence for this dispatch route: <span className="text-signature font-bold">96.8% Match</span>.
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-xs text-smartTextSecondary leading-relaxed">
-                    No scheduled reservations detected. Our AI dispatch system monitors destination spaces in real-time to save you an average of 14 minutes per commute.
+                <div>
+                  <h4 className="text-xs font-bold text-white uppercase font-sans">Dynamic Pricing Active</h4>
+                  <p className="text-[10px] text-smartTextSecondary mt-1 leading-relaxed">
+                    Peak surcharge is currently NOT active. Capped hourly billing of ₹60/hr applies to all live garages.
                   </p>
-                )}
+                </div>
               </div>
 
-              <div className="border-t border-smartBorder/45 pt-3">
-                <span className="text-[9px] font-mono text-smartTextSecondary/60 block">
-                  * Dynamic forecast estimates. Validation will be fully connected during API integration setup.
-                </span>
+              <div className="border-t border-smartBorder/30 pt-4 flex flex-col gap-3">
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="text-smartTextSecondary font-sans">Current Demand Level:</span>
+                  <span className="font-mono text-white font-bold uppercase">Moderate</span>
+                </div>
+                <div className="w-full bg-smartBg h-1.5 rounded overflow-hidden">
+                  <div className="bg-signature h-full" style={{ width: '42%' }} />
+                </div>
+              </div>
+
+              <div className="bg-smartBg/60 border border-smartBorder/45 p-3 rounded-lg flex flex-col gap-2">
+                <h5 className="text-[9px] font-mono text-white uppercase tracking-wider">AI Recommender Tip</h5>
+                <p className="text-[9.5px] text-smartTextSecondary leading-relaxed">
+                  Metro Central Garage currently has the highest available bays close to central station gate. Access barrier opens automatically via registered license plates.
+                </p>
               </div>
             </Card>
           </div>
-
         </div>
 
-        {/* ==================================================
-            4. BOOKING HISTORY FILTER TABS
-           ================================================== */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-smartBorder/40 pb-2">
-          <div className="flex flex-wrap gap-1">
-            {[
-              { id: 'ALL', label: 'All Logs' },
-              { id: 'UPCOMING', label: 'Upcoming' },
-              { id: 'ACTIVE', label: 'Active' },
-              { id: 'COMPLETED', label: 'Completed' },
-              { id: 'CANCELLED', label: 'Cancelled' }
-            ].map(tab => {
-              const count = tab.id === 'ALL' 
-                ? bookings.length 
-                : bookings.filter(b => b.bookingStatus === tab.id).length;
-
-              return (
+        {/* 4. HISTORY / LOG LIST */}
+        <div className="flex flex-col gap-4 mt-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-smartBorder/40 pb-3 gap-2">
+            <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-smartTextSecondary">
+              Reservation Archives
+            </h3>
+            <div className="flex gap-1">
+              {['ALL', 'UPCOMING', 'ACTIVE', 'COMPLETED', 'CANCELLED'].map((filter) => (
                 <button
-                  key={tab.id}
-                  onClick={() => setActiveFilter(tab.id)}
-                  className={`text-[10.5px] font-mono uppercase tracking-wider px-3.5 py-1.5 rounded-full border transition-all ${
-                    activeFilter === tab.id
-                      ? 'bg-smartSurface border-smartBorder text-signature'
-                      : 'border-transparent text-smartTextSecondary hover:text-smartTextPrimary'
+                  key={filter}
+                  onClick={() => setActiveFilter(filter)}
+                  className={`px-3 py-1 rounded text-[9.5px] font-mono font-semibold uppercase tracking-wider transition-all ${
+                    activeFilter === filter 
+                      ? 'bg-signature text-black font-bold' 
+                      : 'bg-smartSurface text-smartTextSecondary border border-smartBorder hover:border-smartBorder/80 hover:text-white'
                   }`}
                 >
-                  {tab.label} ({count})
+                  {filter}
                 </button>
-              );
-            })}
+              ))}
+            </div>
           </div>
 
-          {activeFilter !== 'ALL' && (
-            <button 
-              className="text-[10.5px] font-mono text-signature hover:underline text-left self-start"
-              onClick={() => setActiveFilter('ALL')}
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
-
-        {/* ==================================================
-            5. BOOKING HISTORY GRID/LIST
-           ================================================== */}
-        {filteredBookings.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredBookings.map((booking) => {
-              const statusColors = {
-                UPCOMING: 'bg-aiBlue/10 border-aiBlue/30 text-aiBlue',
-                ACTIVE: 'bg-signature/10 border-signature/30 text-signature',
-                COMPLETED: 'bg-available/10 border-available/30 text-available',
-                CANCELLED: 'bg-occupied/10 border-occupied/30 text-occupied'
-              };
-
-              return (
-                <Card 
-                  key={booking.id} 
-                  variant="default"
-                  className={`transition-all ${
-                    focusedPassBooking?.id === booking.id 
-                      ? 'border-signature bg-signature/[0.01]' 
-                      : 'hover:border-smartBorder/90'
-                  }`}
-                >
+          {loading ? (
+            <div className="text-center py-10 font-mono text-xs text-smartTextSecondary animate-pulse">
+              Loading reservation logs...
+            </div>
+          ) : filteredBookings.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredBookings.map((b) => (
+                <Card key={b.id} className="flex flex-col justify-between gap-4 p-5 hover:border-smartBorder/90 transition-all">
                   <div className="flex justify-between items-start gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className={`text-[8.5px] font-mono font-bold tracking-widest px-2 py-0.5 rounded border ${statusColors[booking.bookingStatus]}`}>
-                          {booking.bookingStatus}
-                        </span>
-                        <span className="text-[10.5px] font-mono text-smartTextSecondary">
-                          REF: {booking.bookingReference}
-                        </span>
-                      </div>
-
-                      <h4 className="text-sm font-display font-bold uppercase text-white tracking-wide">
-                        {booking.facilityName}
-                      </h4>
-                      <p className="text-[11px] text-smartTextSecondary mt-0.5 truncate max-w-[280px]">
-                        {booking.facilityAddress}
+                    <div>
+                      <h4 className="text-[12.5px] font-sans font-bold text-white line-clamp-1">{b.facilityName}</h4>
+                      <p className="text-[10px] text-smartTextSecondary flex items-center gap-1 mt-0.5">
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        {b.facilityAddress}
                       </p>
+                    </div>
+                    <Badge variant={
+                      b.bookingStatus === 'ACTIVE' ? 'occupied' :
+                      b.bookingStatus === 'UPCOMING' ? 'ai' :
+                      b.bookingStatus === 'COMPLETED' ? 'available' : 'default'
+                    } className="uppercase font-mono tracking-wider font-semibold text-[8px]">
+                      {b.bookingStatus}
+                    </Badge>
+                  </div>
 
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-3 pt-3 border-t border-smartBorder/30 text-[11px] font-mono">
-                        <div className="flex items-center gap-1.5 text-smartTextSecondary">
-                          <Calendar className="h-3.5 w-3.5 text-signature" />
-                          <span className="text-white">{booking.date}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-smartTextSecondary">
-                          <Clock className="h-3.5 w-3.5 text-signature" />
-                          <span className="text-white">{booking.startTime} - {booking.endTime}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-smartTextSecondary">
-                          <Layers className="h-3.5 w-3.5 text-aiBlue" />
-                          <span>Slot: <span className="text-white font-bold">{booking.slotNumber} ({booking.floor})</span></span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-smartTextSecondary">
-                          <Car className="h-3.5 w-3.5 text-aiBlue" />
-                          <span className="truncate max-w-[120px]">{booking.vehicle.split(' ')[0]}</span>
-                        </div>
-                      </div>
+                  <div className="grid grid-cols-2 gap-3 bg-smartBg/60 border border-smartBorder/30 p-2.5 rounded text-[10px] font-mono">
+                    <div className="flex items-center gap-1.5 text-white">
+                      <Calendar className="h-3.5 w-3.5 text-signature" />
+                      <span>{b.date}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-white">
+                      <Clock className="h-3.5 w-3.5 text-signature" />
+                      <span>{b.startTime} - {b.endTime}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-white">
+                      <Layers className="h-3.5 w-3.5 text-signature" />
+                      <span>Slot {b.slotNumber} ({b.floor})</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-white">
+                      <Car className="h-3.5 w-3.5 text-signature" />
+                      <span className="truncate max-w-[120px]">{b.vehicle}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center border-t border-smartBorder/30 pt-3">
+                    <div className="flex items-center gap-1.5">
+                      <CreditCard className="h-3.5 w-3.5 text-smartTextSecondary" />
+                      <span className="text-[11px] font-bold text-signature">₹{b.amount}</span>
                     </div>
 
-                    <div className="text-right flex flex-col justify-between items-end h-full min-h-[110px]">
-                      <span className="font-mono text-sm font-bold text-white">
-                        ₹{booking.amount}
-                      </span>
-
-                      {/* Card Action Buttons */}
-                      <div className="flex flex-col gap-1.5 mt-4 w-28">
-                        {booking.bookingStatus === 'UPCOMING' && (
-                          <>
-                            <Button 
-                              variant="secondary" 
-                              size="sm" 
-                              className="text-[10px] w-full uppercase py-1"
-                              onClick={() => setSelectedBookingDetails(booking)}
-                            >
-                              Details
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="text-[10px] w-full uppercase text-occupied hover:bg-occupied/5 border border-smartBorder/30 py-1"
-                              onClick={() => setBookingToCancel(booking)}
-                            >
-                              Cancel
-                            </Button>
-                          </>
-                        )}
-
-                        {booking.bookingStatus === 'ACTIVE' && (
-                          <>
-                            <Button 
-                              variant="primary" 
-                              size="sm" 
-                              className="text-[10px] w-full uppercase py-1"
-                              onClick={() => handleFocusPass(booking)}
-                            >
-                              View Pass
-                            </Button>
-                            <Link href="/map" className="w-full">
-                              <Button 
-                                variant="secondary" 
-                                size="sm" 
-                                className="text-[10px] w-full uppercase py-1"
-                              >
-                                Route
-                              </Button>
-                            </Link>
-                          </>
-                        )}
-
-                        {booking.bookingStatus === 'COMPLETED' && (
-                          <>
-                            <Button 
-                              variant="secondary" 
-                              size="sm" 
-                              className="text-[10px] w-full uppercase py-1"
-                              onClick={() => setSelectedBookingDetails(booking)}
-                            >
-                              Details
-                            </Button>
-                            <Link href="/search" className="w-full">
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="text-[10px] w-full uppercase border border-smartBorder/30 py-1"
-                              >
-                                Book Again
-                              </Button>
-                            </Link>
-                          </>
-                        )}
-
-                        {booking.bookingStatus === 'CANCELLED' && (
-                          <>
-                            <Button 
-                              variant="secondary" 
-                              size="sm" 
-                              className="text-[10px] w-full uppercase py-1"
-                              onClick={() => setSelectedBookingDetails(booking)}
-                            >
-                              Details
-                            </Button>
-                            <Link href="/search" className="w-full">
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="text-[10px] w-full uppercase border border-smartBorder/30 py-1"
-                              >
-                                Rebook
-                              </Button>
-                            </Link>
-                          </>
-                        )}
-                      </div>
+                    <div className="flex gap-1.5">
+                      <Button variant="secondary" size="sm" onClick={() => handleFocusPass(b)}>
+                        Digital Pass
+                      </Button>
+                      <Button variant="ghost" size="sm" className="text-white hover:text-signature" onClick={() => setSelectedBookingDetails(b)}>
+                        Inspect
+                      </Button>
                     </div>
                   </div>
                 </Card>
-              );
-            })}
-          </div>
-        ) : (
-          <EmptyState 
-            title="No Bookings Found"
-            description={`You have no reservations currently matching the filter "${activeFilter}".`}
-            actionText="Find Parking Spots"
-            onAction={() => window.location.href = '/search'}
-          />
-        )}
-
+              ))}
+            </div>
+          ) : (
+            <EmptyState 
+              title="No Reservations Found"
+              description={`You currently have no ${activeFilter === 'ALL' ? '' : activeFilter.toLowerCase()} reservation logs logged on this account.`}
+              actionText="Book Spot Now"
+              onAction={() => router.push('/search')}
+            />
+          )}
+        </div>
       </main>
 
-      {/* ==================================================
-          6. BOOKING DETAILS MODAL
-         ================================================== */}
+      {/* 6. BOOKING DETAILS INSPECTOR MODAL */}
       <Modal
         isOpen={selectedBookingDetails !== null}
         onClose={() => setSelectedBookingDetails(null)}
-        title="Reservation Permit Details"
+        title="Parking Permit Details"
         size="md"
       >
         {selectedBookingDetails && (
           <div className="flex flex-col gap-4 font-sans text-xs">
-            
-            <div className="flex items-center justify-between border-b border-smartBorder/45 pb-3">
+            <div className="grid grid-cols-2 gap-4 border-b border-smartBorder/30 pb-3">
               <div>
-                <span className="text-[10px] font-mono text-smartTextSecondary block uppercase">Reference ID</span>
-                <span className="font-mono text-sm font-bold text-white">{selectedBookingDetails.bookingReference}</span>
+                <span className="text-[8.5px] text-smartTextSecondary block uppercase">Facility Name</span>
+                <span className="text-white text-xs font-semibold">{selectedBookingDetails.facilityName}</span>
               </div>
-              <Badge variant={
-                selectedBookingDetails.bookingStatus === 'UPCOMING' ? 'ai' :
-                selectedBookingDetails.bookingStatus === 'ACTIVE' ? 'signature' :
-                selectedBookingDetails.bookingStatus === 'COMPLETED' ? 'available' : 'occupied'
-              }>
-                {selectedBookingDetails.bookingStatus}
-              </Badge>
+              <div>
+                <span className="text-[8.5px] text-smartTextSecondary block uppercase">Pass Reference</span>
+                <span className="text-white text-xs font-semibold font-mono">{selectedBookingDetails.bookingReference}</span>
+              </div>
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <span className="text-[9.5px] font-mono text-smartTextSecondary uppercase">Location</span>
-              <h4 className="text-sm font-bold text-white">{selectedBookingDetails.facilityName}</h4>
-              <p className="text-[11px] text-smartTextSecondary">{selectedBookingDetails.facilityAddress}</p>
+            <div className="grid grid-cols-3 gap-3 border-b border-smartBorder/30 pb-3">
+              <div>
+                <span className="text-[8.5px] text-smartTextSecondary block uppercase">Date</span>
+                <span className="text-white text-[11px] font-semibold">{selectedBookingDetails.date}</span>
+              </div>
+              <div>
+                <span className="text-[8.5px] text-smartTextSecondary block uppercase">Time Range</span>
+                <span className="text-white text-[11px] font-semibold">{selectedBookingDetails.startTime} - {selectedBookingDetails.endTime}</span>
+              </div>
+              <div>
+                <span className="text-[8.5px] text-smartTextSecondary block uppercase">Status</span>
+                <Badge variant={selectedBookingDetails.bookingStatus === 'ACTIVE' ? 'occupied' : 'available'} className="uppercase text-[8px] font-semibold">
+                  {selectedBookingDetails.bookingStatus}
+                </Badge>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 border-t border-b border-smartBorder/30 py-3 font-mono">
-              <div>
-                <span className="text-[8.5px] text-smartTextSecondary block uppercase">Scheduled Date</span>
-                <span className="text-white text-xs font-semibold">{selectedBookingDetails.date}</span>
-              </div>
-              <div>
-                <span className="text-[8.5px] text-smartTextSecondary block uppercase">Time Frame</span>
-                <span className="text-white text-xs font-semibold">{selectedBookingDetails.startTime} - {selectedBookingDetails.endTime}</span>
-              </div>
+            <div className="grid grid-cols-2 gap-4 border-b border-smartBorder/30 pb-3">
               <div>
                 <span className="text-[8.5px] text-smartTextSecondary block uppercase">Bay & Floor</span>
                 <span className="text-signature text-xs font-semibold">{selectedBookingDetails.slotNumber} ({selectedBookingDetails.floor})</span>
@@ -680,7 +601,7 @@ export default function BookingsPage() {
                 <span className="text-white font-bold block">{selectedBookingDetails.walkMinutes} min</span>
               </div>
               <div>
-                <span className="text-[8px] font-mono text-smartTextSecondary block uppercase">Amount Paid</span>
+                <span className="text-[8px] font-mono text-smartTextSecondary block uppercase">Amount</span>
                 <span className="text-signature font-bold block">₹{selectedBookingDetails.amount}</span>
               </div>
             </div>
@@ -715,9 +636,7 @@ export default function BookingsPage() {
         )}
       </Modal>
 
-      {/* ==================================================
-          7. CANCEL RESERVATION CONFIRMATION MODAL
-         ================================================== */}
+      {/* 7. CANCEL RESERVATION CONFIRMATION MODAL */}
       <Modal
         isOpen={bookingToCancel !== null}
         onClose={() => setBookingToCancel(null)}
@@ -731,7 +650,7 @@ export default function BookingsPage() {
               <div>
                 <h4 className="font-bold text-[11.5px] uppercase">Warning: Cancellation Policy</h4>
                 <p className="text-[10px] mt-0.5 text-occupied/90 leading-relaxed">
-                  You are about to cancel your reservation for spot <span className="font-bold">{bookingToCancel.slotNumber}</span>. This action is irreversible on this client instance.
+                  You are about to cancel your reservation for spot <span className="font-bold">{bookingToCancel.slotNumber}</span>. This action is irreversible.
                 </p>
               </div>
             </div>
@@ -754,10 +673,6 @@ export default function BookingsPage() {
                 <span className="text-available font-bold">₹{bookingToCancel.amount}</span>
               </div>
             </div>
-
-            <p className="text-[9.5px] text-smartTextSecondary/70 leading-relaxed">
-              * prototype Mode Note: Since backend servers are currently offline in this design preview checkpoint, this action updates client state only.
-            </p>
 
             <div className="flex gap-2 justify-end mt-2 pt-2 border-t border-smartBorder/45">
               <Button 
@@ -782,7 +697,6 @@ export default function BookingsPage() {
         )}
       </Modal>
 
-      {/* Global Application Toast */}
       <Toast 
         isOpen={toastOpen} 
         message={toastMsg} 

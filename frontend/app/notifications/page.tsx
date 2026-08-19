@@ -31,30 +31,16 @@ import { StatusBadge } from '../../components/ui/StatusBadge';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Toast } from '../../components/ui/Toast';
 import { Modal } from '../../components/ui/Modal';
-import {
-  INITIAL_MOCK_NOTIFICATIONS,
-  Notification,
-  NotificationType,
-  NotificationPriority,
-  NotificationFilter
-} from '../../lib/notificationData';
+import { Notification, NotificationType, NotificationFilter } from '../../lib/notificationData';
 import { authService } from '../../lib/auth';
+import { api } from '../../lib/api';
 
 export default function NotificationsPage() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
+  const [notifications, setNotifications] = React.useState<Notification[]>([]);
+  const [loading, setLoading] = React.useState(true);
 
-  // State management for notifications
-  const [notifications, setNotifications] = React.useState<Notification[]>(INITIAL_MOCK_NOTIFICATIONS);
-
-  React.useEffect(() => {
-    const authed = authService.isAuthenticated();
-    if (!authed) {
-      router.push('/login');
-    } else {
-      setIsAuthenticated(true);
-    }
-  }, [router]);
   const [activeFilter, setActiveFilter] = React.useState<NotificationFilter>('ALL');
   const [selectedNotification, setSelectedNotification] = React.useState<Notification | null>(null);
 
@@ -69,7 +55,43 @@ export default function NotificationsPage() {
     setToastOpen(true);
   };
 
-  // Calculations
+  const mapNotificationToFrontend = (n: any): Notification => {
+    return {
+      id: n.id,
+      type: n.type as NotificationType,
+      title: n.title,
+      description: n.message || '',
+      timestamp: new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date(n.createdAt).toLocaleDateString(),
+      isRead: n.isRead,
+      priority: 'INFO',
+    };
+  };
+
+  const loadNotifications = React.useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/api/notifications');
+      if (res.success && Array.isArray(res.data)) {
+        setNotifications(res.data.map(mapNotificationToFrontend));
+      }
+    } catch (err: any) {
+      console.error(err);
+      triggerToast(err.message || 'Failed to load notifications.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    const authed = authService.isAuthenticated();
+    if (!authed) {
+      router.push('/login');
+    } else {
+      setIsAuthenticated(true);
+      loadNotifications();
+    }
+  }, [router, loadNotifications]);
+
   const metrics = React.useMemo(() => {
     const total = notifications.length;
     const unread = notifications.filter((n) => !n.isRead).length;
@@ -79,102 +101,82 @@ export default function NotificationsPage() {
   }, [notifications]);
 
   // Handle Mark as Read
-  const handleToggleRead = (id: string, e?: React.MouseEvent) => {
+  const handleToggleRead = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, isRead: !n.isRead } : n))
-    );
-    const notif = notifications.find((n) => n.id === id);
-    if (notif) {
-      triggerToast(
-        `Notification marked as ${!notif.isRead ? 'read' : 'unread'}.`,
-        'success'
-      );
+    try {
+      const res = await api.put(`/api/notifications/${id}/read`);
+      if (res.success) {
+        triggerToast('Notification marked as read.', 'success');
+        await loadNotifications();
+      }
+    } catch (err: any) {
+      triggerToast(err.message || 'Action failed.', 'error');
     }
   };
 
   // Handle Delete
-  const handleDelete = (id: string, e?: React.MouseEvent) => {
+  const handleDelete = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
-    triggerToast('Notification permanently dismissed.', 'warning');
-    if (selectedNotification?.id === id) {
-      setSelectedNotification(null);
+    try {
+      const res = await api.delete(`/api/notifications/${id}`);
+      if (res.success) {
+        triggerToast('Notification permanently dismissed.', 'warning');
+        if (selectedNotification?.id === id) {
+          setSelectedNotification(null);
+        }
+        await loadNotifications();
+      }
+    } catch (err: any) {
+      triggerToast(err.message || 'Delete failed.', 'error');
     }
   };
 
-  // Handle Mark All as Read
-  const handleMarkAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    triggerToast('All notifications marked as read.', 'success');
+  // Mark all read
+  const handleMarkAllRead = async () => {
+    try {
+      const res = await api.put('/api/notifications/read-all');
+      if (res.success) {
+        triggerToast('All notifications marked as read.', 'success');
+        await loadNotifications();
+      }
+    } catch (err: any) {
+      triggerToast(err.message || 'Action failed.', 'error');
+    }
   };
 
-  // Filtered list
+  // Clear all notifications
+  const handleClearAll = async () => {
+    try {
+      // Dismiss all one by one or filter locally if needed
+      for (const n of notifications) {
+        await api.delete(`/api/notifications/${n.id}`);
+      }
+      triggerToast('All notifications cleared.', 'warning');
+      await loadNotifications();
+    } catch (err: any) {
+      triggerToast(err.message || 'Action failed.', 'error');
+    }
+  };
+
+  // Filtered List
   const filteredNotifications = React.useMemo(() => {
-    return notifications.filter((n) => {
-      if (activeFilter === 'ALL') return true;
-      if (activeFilter === 'UNREAD') return !n.isRead;
-      return n.type === activeFilter;
-    });
+    if (activeFilter === 'ALL') return notifications;
+    if (activeFilter === 'UNREAD') return notifications.filter((n) => !n.isRead);
+    return notifications.filter((n) => n.type === activeFilter);
   }, [notifications, activeFilter]);
 
-  // Get matching Lucide icon for notification type
-  const getIcon = (type: NotificationType, priority: NotificationPriority) => {
-    const classes = {
-      CRITICAL: 'text-occupied bg-occupied/10 border-occupied/25',
-      IMPORTANT: 'text-limited bg-limited/10 border-limited/25',
-      INFO: 'text-signature bg-signature/10 border-signature/25'
-    }[priority];
-
-    switch (type) {
+  const getIcon = (type: NotificationType) => {
+    switch (type as string) {
       case 'BOOKING':
-        return (
-          <div className={`h-8 w-8 rounded-full border flex items-center justify-center shrink-0 ${classes}`}>
-            <Calendar className="h-4 w-4" />
-          </div>
-        );
-      case 'AVAILABILITY':
-        return (
-          <div className={`h-8 w-8 rounded-full border flex items-center justify-center shrink-0 ${classes}`}>
-            <MapPin className="h-4 w-4" />
-          </div>
-        );
+        return <Calendar className="h-4.5 w-4.5 text-signature" />;
       case 'AI_INSIGHT':
-        return (
-          <div className={`h-8 w-8 rounded-full border flex items-center justify-center shrink-0 ${classes}`}>
-            <Sparkles className="h-4 w-4" />
-          </div>
-        );
+        return <Sparkles className="h-4.5 w-4.5 text-aiBlue" />;
+      case 'SECURITY':
+        return <Shield className="h-4.5 w-4.5 text-occupied" />;
       case 'SYSTEM':
-        return (
-          <div className={`h-8 w-8 rounded-full border flex items-center justify-center shrink-0 ${classes}`}>
-            <Info className="h-4 w-4" />
-          </div>
-        );
-      case 'PROMOTION':
-        return (
-          <div className={`h-8 w-8 rounded-full border flex items-center justify-center shrink-0 ${classes}`}>
-            <Zap className="h-4 w-4" />
-          </div>
-        );
+        return <Zap className="h-4.5 w-4.5 text-limited" />;
       default:
-        return (
-          <div className={`h-8 w-8 rounded-full border flex items-center justify-center shrink-0 ${classes}`}>
-            <Bell className="h-4 w-4" />
-          </div>
-        );
-    }
-  };
-
-  // Click on related action
-  const handleActionClick = (notif: Notification) => {
-    setSelectedNotification(null);
-    if (notif.relatedFacilityId) {
-      router.push(`/facility/${notif.relatedFacilityId}`);
-    } else if (notif.relatedRoute) {
-      router.push(notif.relatedRoute);
-    } else {
-      triggerToast('No additional action available for this notification.', 'info');
+        return <Bell className="h-4.5 w-4.5 text-smartTextSecondary" />;
     }
   };
 
@@ -187,277 +189,242 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-smartBg text-smartTextPrimary flex flex-col font-sans pb-20 selection:bg-signature/20 selection:text-signature">
+    <div className="min-h-screen bg-smartBg text-smartTextPrimary pb-16 relative">
       <Header />
 
-      <main className="flex-1 mx-auto max-w-5xl w-full px-4 sm:px-6 lg:px-8 pt-4 space-y-6">
-        
-        {/* HEADER BLOCK */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-smartBorder/60">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 flex flex-col gap-6">
+
+        {/* 1. PAGE TITLE & GLOBAL ACTIONS */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-smartBorder/40 pb-5 gap-4">
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold font-display uppercase tracking-wider text-smartTextPrimary flex items-center gap-2">
-              <Bell className="h-5 w-5 text-signature" />
-              NOTIFICATIONS
+            <h1 className="text-2xl sm:text-3xl font-display font-bold uppercase tracking-tight text-white flex items-center gap-2">
+              Notifications
+              {metrics.unread > 0 && (
+                <span className="text-[10px] bg-signature text-black font-mono font-bold px-2 py-0.5 rounded-full">
+                  {metrics.unread} NEW
+                </span>
+              )}
             </h1>
-            <p className="text-xs sm:text-sm text-smartTextSecondary">
-              Stay informed about parking availability, reservations, and SmartPark intelligence.
+            <p className="text-xs text-smartTextSecondary font-sans mt-0.5">
+              Access real-time IoT alerts, AI space recommendations, and active permit schedules.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="bg-smartSurface border border-smartBorder px-3 py-1.5 rounded-full flex items-center gap-2 text-[10px] font-mono">
-              <span className="h-2 w-2 rounded-full bg-signature animate-pulse" />
-              <span>SYNC ACTIVE</span>
-            </div>
-            {metrics.unread > 0 && (
-              <Button
-                variant="secondary"
-                size="sm"
-                className="text-[10px] h-8 gap-1.5 font-mono"
-                onClick={handleMarkAllRead}
-              >
-                <CheckCheck className="h-3.5 w-3.5 text-signature" />
-                MARK ALL READ
-              </Button>
-            )}
+          <div className="flex gap-2">
+            <Button 
+              variant="secondary" 
+              size="sm" 
+              className="text-[9.5px] uppercase tracking-wider font-semibold"
+              disabled={metrics.unread === 0 || loading}
+              onClick={handleMarkAllRead}
+            >
+              <CheckCheck className="h-3 w-3 mr-1" />
+              Mark All Read
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-[9.5px] uppercase tracking-wider font-semibold text-occupied hover:bg-occupied/10 border border-smartBorder/20 hover:border-occupied/35"
+              disabled={notifications.length === 0 || loading}
+              onClick={handleClearAll}
+            >
+              <Trash2 className="h-3 w-3 mr-1" />
+              Dismiss All
+            </Button>
           </div>
         </div>
 
-        {/* METRICS SUMMARY */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="p-3 bg-smartSurface border border-smartBorder rounded-smart font-mono">
-            <span className="text-[9px] text-smartTextSecondary block uppercase">TOTAL NOTIFS</span>
-            <span className="text-base font-bold text-smartTextPrimary">{metrics.total}</span>
+        {/* 2. SUMMARY COUNTER BLOCKS */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-smartSurface border border-smartBorder/60 p-3 rounded-lg flex justify-between items-center">
+            <div>
+              <span className="text-[8.5px] font-mono text-smartTextSecondary uppercase block">Total Messages</span>
+              <span className="text-lg font-bold text-white font-mono mt-0.5 block">{metrics.total}</span>
+            </div>
+            <Inbox className="h-5 w-5 text-smartTextSecondary/50" />
           </div>
-
-          <div className="p-3 bg-signature/10 border border-signature/30 rounded-smart font-mono">
-            <span className="text-[9px] text-signature block uppercase">UNREAD</span>
-            <span className="text-base font-bold text-signature">{metrics.unread}</span>
+          <div className="bg-smartSurface border border-smartBorder/60 p-3 rounded-lg flex justify-between items-center">
+            <div>
+              <span className="text-[8.5px] font-mono text-smartTextSecondary uppercase block">Unread Alerts</span>
+              <span className="text-lg font-bold text-signature font-mono mt-0.5 block">{metrics.unread}</span>
+            </div>
+            <Bell className="h-5 w-5 text-signature/70" />
           </div>
-
-          <div className="p-3 bg-smartSurface border border-smartBorder rounded-smart font-mono">
-            <span className="text-[9px] text-smartTextSecondary block uppercase">BOOKINGS ALERTS</span>
-            <span className="text-base font-bold text-smartTextPrimary">{metrics.booking}</span>
+          <div className="bg-smartSurface border border-smartBorder/60 p-3 rounded-lg flex justify-between items-center">
+            <div>
+              <span className="text-[8.5px] font-mono text-smartTextSecondary uppercase block">Permit Updates</span>
+              <span className="text-lg font-bold text-aiBlue font-mono mt-0.5 block">{metrics.booking}</span>
+            </div>
+            <Calendar className="h-5 w-5 text-aiBlue/70" />
           </div>
-
-          <div className="p-3 bg-smartSurface border border-smartBorder rounded-smart font-mono">
-            <span className="text-[9px] text-smartTextSecondary block uppercase">AI INSIGHTS</span>
-            <span className="text-base font-bold text-smartTextPrimary">{metrics.aiInsight}</span>
+          <div className="bg-smartSurface border border-smartBorder/60 p-3 rounded-lg flex justify-between items-center">
+            <div>
+              <span className="text-[8.5px] font-mono text-smartTextSecondary uppercase block">AI Insights</span>
+              <span className="text-lg font-bold text-available font-mono mt-0.5 block">{metrics.aiInsight}</span>
+            </div>
+            <Sparkles className="h-5 w-5 text-available/70" />
           </div>
         </div>
 
-        {/* WORKSPACE LAYOUT */}
-        <div className="space-y-4">
-          
-          {/* HORIZONTAL FILTERS SCROLL */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-smartBorder/40">
-            {[
-              { id: 'ALL', label: 'All Alerts' },
-              { id: 'UNREAD', label: `Unread (${metrics.unread})` },
-              { id: 'BOOKING', label: 'Bookings' },
-              { id: 'AVAILABILITY', label: 'Availability' },
-              { id: 'AI_INSIGHT', label: 'AI Intelligence' },
-              { id: 'SYSTEM', label: 'System' },
-              { id: 'PROMOTION', label: 'Promotions' }
-            ].map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setActiveFilter(f.id as NotificationFilter)}
-                className={`text-xs px-3.5 py-1.5 rounded-full font-sans transition-all shrink-0 border uppercase font-medium ${
-                  activeFilter === f.id
-                    ? 'bg-signature border-signature text-smartBg font-bold'
-                    : 'bg-smartSurface border-smartBorder text-smartTextSecondary hover:text-smartTextPrimary'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-
-          {/* NOTIFICATION LIST OR EMPTY STATE */}
-          {filteredNotifications.length === 0 ? (
-            <div className="py-12">
-              <EmptyState
-                title="No notifications found"
-                description={`There are no alerts matching the filter "${activeFilter.toLowerCase()}".`}
-                actionText="View All Alerts"
-                onAction={() => setActiveFilter('ALL')}
-              />
-            </div>
-          ) : (
-            <div className="space-y-2.5">
-              {filteredNotifications.map((notif) => (
-                <div
-                  key={notif.id}
-                  onClick={() => setSelectedNotification(notif)}
-                  className={`group relative p-4 rounded-smart border transition-all cursor-pointer flex items-start gap-4 hover:border-smartBorder/90 ${
-                    notif.isRead
-                      ? 'bg-smartSurface/50 border-smartBorder/45'
-                      : 'bg-smartElevated border-signature/30 shadow-md ring-1 ring-signature/10'
+        {/* 3. LIST CONTROLS */}
+        <div className="flex flex-col gap-4">
+          <div className="flex justify-between items-center border-b border-smartBorder/30 pb-2">
+            <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-smartTextSecondary">
+              Message Feeds
+            </h3>
+            <div className="flex gap-1">
+              {(['ALL', 'UNREAD', 'BOOKING', 'AI_INSIGHT'] as const).map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setActiveFilter(filter)}
+                  className={`px-3 py-1 rounded text-[9.5px] font-mono font-semibold uppercase tracking-wider transition-all ${
+                    activeFilter === filter 
+                      ? 'bg-signature text-black font-bold' 
+                      : 'bg-smartSurface text-smartTextSecondary border border-smartBorder hover:border-smartBorder/80 hover:text-white'
                   }`}
-                  aria-label={`Notification: ${notif.title}, Priority: ${notif.priority}, State: ${notif.isRead ? 'Read' : 'Unread'}`}
                 >
-                  {/* Left priority visual tick for unread */}
-                  {!notif.isRead && (
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-signature rounded-l-smart" />
-                  )}
+                  {filter}
+                </button>
+              ))}
+            </div>
+          </div>
 
-                  {/* Icon */}
-                  {getIcon(notif.type, notif.priority)}
-
-                  {/* Body Content */}
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-smartTextSecondary tracking-widest uppercase">
-                          {notif.type.replace('_', ' ')}
-                        </span>
-                        <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${
-                          notif.priority === 'CRITICAL' ? 'text-occupied bg-occupied/10 border-occupied/25' :
-                          notif.priority === 'IMPORTANT' ? 'text-limited bg-limited/10 border-limited/25' :
-                          'text-smartTextSecondary bg-smartBg border-smartBorder'
-                        }`}>
-                          {notif.priority}
-                        </span>
+          {/* 4. ALERTS LIST */}
+          {loading ? (
+            <div className="text-center py-12 font-mono text-xs text-smartTextSecondary animate-pulse">
+              Loading notification feed...
+            </div>
+          ) : filteredNotifications.length > 0 ? (
+            <div className="flex flex-col gap-2.5">
+              {filteredNotifications.map((n) => (
+                <div
+                  key={n.id}
+                  onClick={() => setSelectedNotification(n)}
+                  className={`p-4 border rounded-smart-md cursor-pointer transition-all flex justify-between items-start gap-4 hover:border-smartBorder/80 ${
+                    n.isRead 
+                      ? 'bg-smartSurface/50 border-smartBorder/40 opacity-70' 
+                      : 'bg-smartSurface border-signature/30 shadow-md shadow-signature/[0.02]'
+                  }`}
+                >
+                  <div className="flex items-start gap-3.5">
+                    <div className={`p-2 rounded mt-0.5 shrink-0 ${
+                      n.isRead ? 'bg-smartBg text-smartTextSecondary/60' : 'bg-smartBg text-white'
+                    }`}>
+                      {getIcon(n.type)}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className={`text-[12px] font-sans font-bold leading-snug ${
+                          n.isRead ? 'text-smartTextSecondary' : 'text-white'
+                        }`}>{n.title}</h4>
+                        {!n.isRead && (
+                          <span className="h-1.5 w-1.5 rounded-full bg-signature animate-pulse" />
+                        )}
                       </div>
-                      <span className="text-[10px] font-mono text-smartTextSecondary shrink-0">
-                        {notif.timestamp}
+                      <p className="text-[10px] text-smartTextSecondary mt-1 leading-relaxed line-clamp-2">
+                        {n.description}
+                      </p>
+                      <span className="text-[8.5px] font-mono text-smartTextSecondary/50 mt-2 block">
+                        {n.timestamp}
                       </span>
                     </div>
-
-                    <h3 className={`text-xs font-bold ${notif.isRead ? 'text-smartTextPrimary/80' : 'text-smartTextPrimary group-hover:text-signature'} transition-colors`}>
-                      {notif.title}
-                    </h3>
-                    <p className="text-xs text-smartTextSecondary leading-relaxed line-clamp-2">
-                      {notif.description}
-                    </p>
                   </div>
 
-                  {/* Action buttons */}
-                  <div className="flex items-center gap-1 shrink-0 self-center md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                    <IconButton
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => handleToggleRead(notif.id, e)}
-                      title={notif.isRead ? 'Mark as Unread' : 'Mark as Read'}
-                      aria-label={notif.isRead ? 'Mark as Unread' : 'Mark as Read'}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {!n.isRead && (
+                      <IconButton 
+                        onClick={(e) => handleToggleRead(n.id, e)}
+                        title="Mark as Read"
+                      >
+                        <BookmarkCheck className="h-3.5 w-3.5" />
+                      </IconButton>
+                    )}
+                    <IconButton 
+                      onClick={(e) => handleDelete(n.id, e)}
+                      title="Dismiss"
+                      className="text-occupied/60 hover:text-occupied"
                     >
-                      {notif.isRead ? (
-                        <Bookmark className="h-3.5 w-3.5 text-smartTextSecondary" />
-                      ) : (
-                        <BookmarkCheck className="h-3.5 w-3.5 text-signature" />
-                      )}
-                    </IconButton>
-
-                    <IconButton
-                      variant="ghost"
-                      size="sm"
-                      className="hover:text-occupied"
-                      onClick={(e) => handleDelete(notif.id, e)}
-                      title="Dismiss Alert"
-                      aria-label="Dismiss Alert"
-                    >
-                      <Trash2 className="h-3.5 w-3.5 text-smartTextSecondary hover:text-occupied" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </IconButton>
                   </div>
                 </div>
               ))}
             </div>
+          ) : (
+            <EmptyState 
+              title="Inbox Empty"
+              description={`No notifications matching "${activeFilter.toLowerCase()}" in your archive.`}
+            />
           )}
-
         </div>
-
       </main>
 
-      {/* NOTIFICATION DETAIL MODAL */}
-      {selectedNotification && (
-        <Modal
-          isOpen={!!selectedNotification}
-          onClose={() => setSelectedNotification(null)}
-          title="Notification Details"
-          size="md"
-        >
-          <div className="space-y-4 text-xs font-sans text-smartTextSecondary">
-            
-            {/* Header Meta */}
-            <div className="flex justify-between items-center border-b border-smartBorder/45 pb-3">
-              <div>
-                <span className="text-[9px] font-mono uppercase block text-smartTextSecondary">Alert Type</span>
-                <strong className="text-sm text-smartTextPrimary uppercase tracking-wider font-display">
-                  {selectedNotification.type.replace('_', ' ')}
-                </strong>
+      {/* 5. MODAL INSPECTOR */}
+      <Modal
+        isOpen={selectedNotification !== null}
+        onClose={() => setSelectedNotification(null)}
+        title="Alert Details"
+        size="sm"
+      >
+        {selectedNotification && (
+          <div className="flex flex-col gap-4 font-sans text-xs">
+            <div className="flex items-start gap-3 border-b border-smartBorder/30 pb-3">
+              <div className="p-2.5 rounded bg-smartBg text-white shrink-0">
+                {getIcon(selectedNotification.type)}
               </div>
-              <div className="text-right">
-                <span className="text-[9px] font-mono block text-smartTextSecondary">Priority Level</span>
-                <span className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded border uppercase tracking-wider ${
-                  selectedNotification.priority === 'CRITICAL' ? 'text-occupied bg-occupied/10 border-occupied/25' :
-                  selectedNotification.priority === 'IMPORTANT' ? 'text-limited bg-limited/10 border-limited/25' :
-                  'text-smartTextSecondary bg-smartBg border-smartBorder'
-                }`}>
-                  {selectedNotification.priority}
+              <div>
+                <h4 className="font-bold text-white text-[12px]">{selectedNotification.title}</h4>
+                <span className="text-[8.5px] font-mono text-smartTextSecondary mt-0.5 block">
+                  {selectedNotification.timestamp}
                 </span>
               </div>
             </div>
 
-            {/* Notification Core Card */}
-            <div className="p-4 bg-smartBg border border-smartBorder rounded-smart space-y-2">
-              <div className="text-[10px] font-mono text-smartTextSecondary">
-                Received {selectedNotification.timestamp}
+            <p className="text-[10.5px] text-smartTextSecondary leading-relaxed bg-smartBg/60 border border-smartBorder/45 p-3 rounded-lg">
+              {selectedNotification.description}
+            </p>
+
+            <div className="flex justify-between items-center border-t border-smartBorder/30 pt-3">
+              <div className="flex items-center gap-1 font-mono text-[9px] text-smartTextSecondary/60">
+                <span>FEED: {selectedNotification.type}</span>
               </div>
-              <h3 className="text-xs font-bold text-smartTextPrimary">
-                {selectedNotification.title}
-              </h3>
-              <p className="leading-relaxed text-smartTextSecondary text-xs">
-                {selectedNotification.description}
-              </p>
-            </div>
-
-            {/* Actions Panel */}
-            <div className="pt-4 border-t border-smartBorder flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => handleToggleRead(selectedNotification.id)}
-                className="w-full sm:w-auto text-[10px]"
-              >
-                {selectedNotification.isRead ? 'Mark as Unread' : 'Mark as Read'}
-              </Button>
-
-              <div className="flex gap-2 w-full sm:w-auto">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleDelete(selectedNotification.id)}
-                  className="hover:text-occupied border-smartBorder hover:border-occupied/40 text-[10px] w-1/2 sm:w-auto"
-                >
-                  Dismiss Alert
-                </Button>
-
-                {(selectedNotification.relatedFacilityId || selectedNotification.relatedRoute) && (
+              <div className="flex gap-2">
+                {!selectedNotification.isRead && (
                   <Button
-                    variant="primary"
+                    variant="secondary"
                     size="sm"
-                    onClick={() => handleActionClick(selectedNotification)}
-                    className="gap-1.5 text-[10px] w-1/2 sm:w-auto"
+                    className="text-[9.5px] uppercase font-semibold"
+                    onClick={() => {
+                      handleToggleRead(selectedNotification.id);
+                      setSelectedNotification(null);
+                    }}
                   >
-                    View Destination
-                    <ExternalLink className="h-3 w-3" />
+                    Mark Read
                   </Button>
                 )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-[9.5px] uppercase font-semibold text-white bg-occupied hover:bg-occupied/85"
+                  onClick={() => {
+                    handleDelete(selectedNotification.id);
+                    setSelectedNotification(null);
+                  }}
+                >
+                  Dismiss
+                </Button>
               </div>
             </div>
-
           </div>
-        </Modal>
-      )}
+        )}
+      </Modal>
 
-      {/* TOAST SYSTEM */}
-      <Toast
-        isOpen={toastOpen}
-        onClose={() => setToastOpen(false)}
-        message={toastMsg}
-        type={toastType}
+      <Toast 
+        isOpen={toastOpen} 
+        message={toastMsg} 
+        type={toastType} 
+        onClose={() => setToastOpen(false)} 
+        duration={3500}
       />
     </div>
   );

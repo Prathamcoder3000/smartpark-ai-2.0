@@ -612,6 +612,31 @@ const FloorSlotGrid: React.FC<FloorSlotGridProps> = ({
   </div>
 );
 
+const mapIdToBackend = (idOrSlug: string): string => {
+  const normalized = idOrSlug.toLowerCase();
+  if (normalized === 'fac-01' || normalized === 'metro-central-garage' || normalized === 'facility-metro-central') {
+    return 'facility-metro-central';
+  }
+  if (normalized === 'fac-02' || normalized === 'cyber-city-hub' || normalized === 'facility-cyber-city') {
+    return 'facility-cyber-city';
+  }
+  if (normalized === 'fac-03' || normalized === 'techpark-parking' || normalized === 'facility-techpark') {
+    return 'facility-techpark';
+  }
+  if (normalized === 'fac-04' || normalized === 'financial-plaza-deck' || normalized === 'facility-financial-plaza') {
+    return 'facility-financial-plaza';
+  }
+  return idOrSlug;
+};
+
+const mapIdToFrontend = (backendId: string): string => {
+  if (backendId === 'facility-metro-central') return 'fac-01';
+  if (backendId === 'facility-cyber-city') return 'fac-02';
+  if (backendId === 'facility-techpark') return 'fac-03';
+  if (backendId === 'facility-financial-plaza') return 'fac-04';
+  return backendId;
+};
+
 // ─── Main Page Component ──────────────────────────────────────
 
 export default function LiveMapPage() {
@@ -649,9 +674,71 @@ export default function LiveMapPage() {
     []
   );
 
+  const [facilitiesList, setFacilitiesList] = useState<MapFacility[]>(MAP_FACILITIES);
+
+  React.useEffect(() => {
+    async function load() {
+      try {
+        const response = await fetch('http://localhost:8001/api/facilities');
+        const json = await response.json();
+        if (json.success && Array.isArray(json.data)) {
+          const mapped = json.data.map((f: any) => {
+            const template = MAP_FACILITIES.find(m => mapIdToBackend(m.id) === f.id) || MAP_FACILITIES[0];
+            
+            const floors = template.floors.map(floorTemplate => {
+              const apiFloor = f.floors?.find((fl: any) => fl.level === floorTemplate.id) || {};
+              const slots = (apiFloor.slots || []).map((s: any) => ({
+                id: s.id,
+                state: s.status as SlotState,
+                isEV: s.isEVCharging
+              }));
+              const availCount = slots.filter((s: any) => s.state === 'AVAILABLE').length;
+
+              return {
+                ...floorTemplate,
+                slots: slots.length > 0 ? slots : floorTemplate.slots,
+                availableCount: slots.length > 0 ? availCount : floorTemplate.availableCount
+              };
+            });
+
+            return {
+              ...template,
+              id: mapIdToFrontend(f.id),
+              name: f.name,
+              availableBays: f.availableSlots,
+              totalBays: f.totalCapacity,
+              status: f.availableSlots > 0 ? 'AVAILABLE' : 'LIMITED',
+              floors
+            };
+          });
+          setFacilitiesList(mapped);
+        }
+      } catch (err) {
+        console.error('Failed to load map facilities:', err);
+      }
+    }
+    load();
+
+    // Setup SSE connection for real-time facility slot status updates
+    // In horizontal scale this event emitter would hook up to redis pub/sub
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource('http://localhost:8001/api/realtime/facilities/all');
+      eventSource.onmessage = () => {
+        load(); // Reload fresh database snapshot upon SSE triggers
+      };
+    } catch (e) {
+      console.warn('Realtime updates offline', e);
+    }
+
+    return () => {
+      eventSource?.close();
+    };
+  }, []);
+
   // ── Derived: filtered facilities (also used for marker visibility) ─
   const filteredFacilities = useMemo(() => {
-    const bySearch = MAP_FACILITIES.filter((f) => {
+    const bySearch = facilitiesList.filter((f) => {
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
       return (
@@ -666,15 +753,15 @@ export default function LiveMapPage() {
         ? bySearch
         : bySearch.filter((f) => f.zone.includes(selectedZone));
     return applyFilter(byZone, activeFilter);
-  }, [searchQuery, activeFilter, selectedZone]);
+  }, [facilitiesList, searchQuery, activeFilter, selectedZone]);
 
   // ── Derived: selected facility object ─────────────────────
   const selectedFacility = useMemo(
     () =>
       selectedFacilityId
-        ? MAP_FACILITIES.find((f) => f.id === selectedFacilityId) ?? null
+        ? facilitiesList.find((f) => f.id === selectedFacilityId) ?? null
         : null,
-    [selectedFacilityId]
+    [selectedFacilityId, facilitiesList]
   );
 
   // ── Derived: current floor object ────────────────────────

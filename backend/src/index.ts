@@ -8,6 +8,10 @@ import { vehicleRoutes } from './routes/vehicles';
 import { reservationRoutes } from './routes/reservations';
 import { bookingRoutes } from './routes/bookings';
 import { notificationRoutes } from './routes/notifications';
+import { operatorRoutes } from './routes/operator';
+import { telemetryRoutes } from './routes/telemetry';
+import { aiRoutes } from './routes/ai';
+import { realtimeRoutes } from './routes/realtime';
 
 dotenv.config();
 
@@ -34,6 +38,10 @@ const start = async () => {
   await server.register(reservationRoutes, { prefix: '/api/reservations' });
   await server.register(bookingRoutes, { prefix: '/api/bookings' });
   await server.register(notificationRoutes, { prefix: '/api/notifications' });
+  await server.register(operatorRoutes, { prefix: '/api/operator' });
+  await server.register(telemetryRoutes, { prefix: '/api/telemetry' });
+  await server.register(aiRoutes, { prefix: '/api/ai' });
+  await server.register(realtimeRoutes, { prefix: '/api/realtime' });
 
   const port = Number(process.env.PORT ?? 8001);
   const host = '0.0.0.0';

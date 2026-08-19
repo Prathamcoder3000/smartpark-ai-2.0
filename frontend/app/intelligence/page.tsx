@@ -36,6 +36,31 @@ import {
   RegionalSummary
 } from '../../lib/intelligenceData';
 
+const mapIdToBackend = (idOrSlug: string): string => {
+  const normalized = idOrSlug.toLowerCase();
+  if (normalized === 'fac-01' || normalized === 'metro-central-garage' || normalized === 'facility-metro-central') {
+    return 'facility-metro-central';
+  }
+  if (normalized === 'fac-02' || normalized === 'cyber-city-hub' || normalized === 'facility-cyber-city') {
+    return 'facility-cyber-city';
+  }
+  if (normalized === 'fac-03' || normalized === 'techpark-parking' || normalized === 'facility-techpark') {
+    return 'facility-techpark';
+  }
+  if (normalized === 'fac-04' || normalized === 'financial-plaza-deck' || normalized === 'facility-financial-plaza') {
+    return 'facility-financial-plaza';
+  }
+  return idOrSlug;
+};
+
+const mapIdToFrontend = (backendId: string): string => {
+  if (backendId === 'facility-metro-central') return 'fac-01';
+  if (backendId === 'facility-cyber-city') return 'fac-02';
+  if (backendId === 'facility-techpark') return 'fac-03';
+  if (backendId === 'facility-financial-plaza') return 'fac-04';
+  return backendId;
+};
+
 export default function IntelligencePage() {
   // --- States ---
   const [mounted, setMounted] = React.useState<boolean>(false);
@@ -46,11 +71,74 @@ export default function IntelligencePage() {
   const [sortKey, setSortKey] = React.useState<string>('recommendation');
   const [sortAsc, setSortAsc] = React.useState<boolean>(false);
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
+  
+  const [facilitiesList, setFacilitiesList] = React.useState<IntelligenceFacility[]>([]);
 
   React.useEffect(() => {
     setMounted(true);
   }, []);
-  
+
+  React.useEffect(() => {
+    async function fetchAIPredictions() {
+      try {
+        setIsLoading(true);
+        let evCompatible = false;
+        let maxPrice = 50;
+        let maxWalkingDistanceMin = 10;
+        
+        if (priority === 'price') {
+          maxPrice = 30;
+        } else if (priority === 'distance') {
+          maxWalkingDistanceMin = 5;
+        } else if (priority === 'ev-compatible') {
+          evCompatible = true;
+        }
+
+        const response = await fetch('http://localhost:8001/api/ai/recommend', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            preferences: {
+              evCompatible,
+              maxPrice,
+              maxWalkingDistanceMin
+            }
+          })
+        });
+        const json = await response.json();
+        if (json.success && Array.isArray(json.recommendations)) {
+          const templates = Object.values(MOCK_INTELLIGENCE_FACILITIES).flat();
+          const mapped: IntelligenceFacility[] = json.recommendations.map((r: any) => {
+            const facilityId = r.facility.id;
+            const mappedId = mapIdToFrontend(facilityId);
+            const template = templates.find((t: any) => t.id === mappedId || t.id === facilityId) || templates[0];
+            
+            return {
+              ...template,
+              id: mappedId,
+              name: r.facility.name,
+              recommendationScore: Math.round(r.matchScore),
+              walkMinutes: r.estimatedWalkingTime,
+              ratePerHour: r.estimatedPrice,
+              reasons: r.reasoning.map((text: string, i: number) => ({ id: `reason-${i}`, label: text, description: 'AI calculated' }))
+            };
+          });
+          setFacilitiesList(mapped);
+          if (mapped.length > 0) {
+            setSelectedFacilityId(mapped[0].id);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load AI predictions:', e);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    if (mounted) {
+      fetchAIPredictions();
+    }
+  }, [priority, region, mounted]);
+
   // Toast state
   const [toastOpen, setToastOpen] = React.useState<boolean>(false);
   const [toastMsg, setToastMsg] = React.useState<string>('');
@@ -65,16 +153,11 @@ export default function IntelligencePage() {
 
   // --- Filter and data retrieval logic ---
   const activeRegionData = MOCK_REGIONS.find((r) => r.regionId === region) || MOCK_REGIONS[0];
-  const facilitiesRaw = MOCK_INTELLIGENCE_FACILITIES[region] || [];
+  const facilitiesRaw = facilitiesList;
 
   // Simulate loading state on filters changes
   const handleFilterChange = (setter: (val: string) => void, val: string, filterName: string) => {
-    setIsLoading(true);
     setter(val);
-    setTimeout(() => {
-      setIsLoading(false);
-      showToast(`Intelligence filter: Updated ${filterName} to "${val}"`, 'info');
-    }, 400);
   };
 
   // Sort and filter facilities list based on state

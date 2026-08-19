@@ -38,35 +38,58 @@ import {
 } from '../../lib/facilityData';
 import {
   VehicleOption,
-  INITIAL_VEHICLE_OPTIONS,
   calculatePricing,
   ReservationSelection,
   ReservationSummary
 } from '../../lib/reservationData';
+import { api } from '../../lib/api';
+import { authService } from '../../lib/auth';
+
+const mapIdToBackend = (idOrSlug: string): string => {
+  const normalized = idOrSlug.toLowerCase();
+  if (normalized === 'fac-01' || normalized === 'metro-central-garage' || normalized === 'facility-metro-central') {
+    return 'facility-metro-central';
+  }
+  if (normalized === 'fac-02' || normalized === 'cyber-city-hub' || normalized === 'facility-cyber-city') {
+    return 'facility-cyber-city';
+  }
+  if (normalized === 'fac-03' || normalized === 'techpark-parking' || normalized === 'facility-techpark') {
+    return 'facility-techpark';
+  }
+  if (normalized === 'fac-04' || normalized === 'financial-plaza-deck' || normalized === 'facility-financial-plaza') {
+    return 'facility-financial-plaza';
+  }
+  return idOrSlug;
+};
+
+const mapIdToFrontend = (backendId: string): string => {
+  if (backendId === 'facility-metro-central') return 'fac-01';
+  if (backendId === 'facility-cyber-city') return 'fac-02';
+  if (backendId === 'facility-techpark') return 'fac-03';
+  if (backendId === 'facility-financial-plaza') return 'fac-04';
+  return backendId;
+};
 
 export default function ReservePage() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // Step state: 1 = SELECT, 2 = REVIEW
   const [step, setStep] = React.useState<number>(1);
+  const [loading, setLoading] = React.useState(true);
 
-  // Load facility slug from search params
   const initialFacilitySlug = searchParams?.get('facility') || '';
   const initialSlotId = searchParams?.get('slot') || '';
   const initialFloorId = searchParams?.get('floor') || '';
 
-  // Invalid parameter safety
   const [isInvalidParam, setIsInvalidParam] = React.useState(false);
 
-  // Vehicle list state (local session storage/state)
-  const [vehicles, setVehicles] = React.useState<VehicleOption[]>(INITIAL_VEHICLE_OPTIONS);
+  const [vehicles, setVehicles] = React.useState<VehicleOption[]>([]);
   const [addVehicleModalOpen, setAddVehicleModalOpen] = React.useState(false);
   const [newVehLabel, setNewVehLabel] = React.useState('');
   const [newVehReg, setNewVehReg] = React.useState('');
   const [newVehType, setNewVehType] = React.useState('EV');
 
-  // Form states
+  const [facilitiesList, setFacilitiesList] = React.useState<FacilityDetails[]>(MOCK_FACILITY_DETAILS);
   const [selectedFacilityId, setSelectedFacilityId] = React.useState('');
   const [reservationDate, setReservationDate] = React.useState('');
   const [startTime, setStartTime] = React.useState('09:00');
@@ -75,12 +98,10 @@ export default function ReservePage() {
   const [selectedSlotId, setSelectedSlotId] = React.useState('');
   const [selectedVehicleId, setSelectedVehicleId] = React.useState('');
 
-  // Preferences states
   const [prefEvCharging, setPrefEvCharging] = React.useState(false);
   const [prefCoveredParking, setPrefCoveredParking] = React.useState(false);
   const [prefShorterWalk, setPrefShorterWalk] = React.useState(false);
 
-  // Toast
   const [toastOpen, setToastOpen] = React.useState(false);
   const [toastMsg, setToastMsg] = React.useState('');
   const [toastType, setToastType] = React.useState<'success' | 'warning' | 'info' | 'error'>('success');
@@ -91,75 +112,104 @@ export default function ReservePage() {
     setToastOpen(true);
   };
 
-  // Resolve active facility details
-  const facility = React.useMemo(() => {
-    return MOCK_FACILITY_DETAILS.find(
-      (f) => f.slug === selectedFacilityId || f.id === selectedFacilityId
-    );
-  }, [selectedFacilityId]);
+  const loadData = React.useCallback(async () => {
+    try {
+      setLoading(true);
 
-  // Set default initial facility context
-  React.useEffect(() => {
-    if (initialFacilitySlug) {
-      const match = MOCK_FACILITY_DETAILS.find(
-        (f) => f.slug === initialFacilitySlug || f.id === initialFacilitySlug
-      );
-      if (match) {
-        setSelectedFacilityId(match.id);
-        setIsInvalidParam(false);
-        if (match.floors.length > 0) {
-          setActiveFloorTab(initialFloorId || match.floors[0].id);
+      // Fetch user vehicles
+      const vRes = await api.get('/api/vehicles');
+      if (vRes.success && Array.isArray(vRes.data)) {
+        const mappedVeh: VehicleOption[] = vRes.data.map((v: any) => ({
+          id: v.id,
+          label: `${v.make} ${v.model}`,
+          registration: v.licensePlate,
+          type: v.type,
+          isDefault: v.isDefault || false
+        }));
+        setVehicles(mappedVeh);
+        if (mappedVeh.length > 0) {
+          setSelectedVehicleId(mappedVeh[0].id);
         }
-      } else {
-        setIsInvalidParam(true);
       }
-    } else if (MOCK_FACILITY_DETAILS.length > 0) {
-      setSelectedFacilityId(MOCK_FACILITY_DETAILS[0].id);
-      setActiveFloorTab(MOCK_FACILITY_DETAILS[0].floors[0].id);
+
+      // Fetch facilities list
+      const fRes = await api.get('/api/facilities');
+      if (fRes.success && Array.isArray(fRes.data)) {
+        const mappedFac = MOCK_FACILITY_DETAILS.map(template => {
+          const apiF = fRes.data.find((item: any) => item.id === mapIdToBackend(template.id));
+          if (!apiF) return template;
+
+          const floors = template.floors.map(floorTemplate => {
+            const apiFloor = apiF.floors?.find((fl: any) => fl.level === floorTemplate.id) || {};
+            const slots = (apiFloor.slots || []).map((s: any) => ({
+              id: s.id,
+              state: s.status,
+              isEV: s.isEVCharging,
+              isDisabled: s.status === 'DISABLED'
+            }));
+
+            return {
+              ...floorTemplate,
+              slots: slots.length > 0 ? slots : floorTemplate.slots
+            };
+          });
+
+          return {
+            ...template,
+            availableBays: apiF.availableSlots,
+            totalBays: apiF.totalCapacity,
+            floors
+          };
+        });
+
+        setFacilitiesList(mappedFac);
+
+        // Resolve selected facility
+        let defaultFac = mappedFac[0];
+        if (initialFacilitySlug) {
+          const match = mappedFac.find(
+            (f) => f.slug === initialFacilitySlug || f.id === initialFacilitySlug
+          );
+          if (match) defaultFac = match;
+        }
+
+        setSelectedFacilityId(defaultFac.id);
+        setActiveFloorTab(initialFloorId || defaultFac.floors[0].id);
+      }
+    } catch (err: any) {
+      console.error(err);
+      triggerToast(err.message || 'Failed to load setup data.', 'error');
+    } finally {
+      setLoading(false);
     }
   }, [initialFacilitySlug, initialFloorId]);
 
-  // Set default parameters
   React.useEffect(() => {
-    // Set Tomorrow's date as default
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    setReservationDate(tomorrow.toISOString().split('T')[0]);
-
-    // Set default vehicle
-    const defaultVeh = vehicles.find((v) => v.isDefault) || vehicles[0];
-    if (defaultVeh) {
-      setSelectedVehicleId(defaultVeh.id);
+    const authed = authService.isAuthenticated();
+    if (!authed) {
+      router.push('/login');
+    } else {
+      loadData();
     }
-  }, []);
+  }, [router, loadData]);
 
-  // Update floor tabs when facility changes
-  React.useEffect(() => {
-    if (facility && facility.floors.length > 0) {
-      // Don't overwrite if we matched the initial param floor
-      if (initialFloorId && facility.floors.some(f => f.id === initialFloorId)) {
-        setActiveFloorTab(initialFloorId);
-      } else {
-        setActiveFloorTab(facility.floors[0].id);
-      }
-      setSelectedSlotId('');
-    }
-  }, [selectedFacilityId, facility, initialFloorId]);
-
-  // Set initial slot parameter if specified
   React.useEffect(() => {
     if (initialSlotId) {
       setSelectedSlotId(initialSlotId);
     }
   }, [initialSlotId]);
 
-  // Get active floor details
+  const facility = React.useMemo(() => {
+    return facilitiesList.find(
+      (f) => f.slug === selectedFacilityId || f.id === selectedFacilityId
+    );
+  }, [selectedFacilityId, facilitiesList]);
+
   const activeFloor = React.useMemo(() => {
     if (!facility) return null;
     return facility.floors.find((f) => f.id === activeFloorTab) || facility.floors[0];
   }, [facility, activeFloorTab]);
 
-  // Compute pricing
   const pricing = React.useMemo(() => {
     if (!facility) {
       return { baseAmount: 0, serviceFee: 0, convenienceFee: 0, discount: 0, totalAmount: 0 };
@@ -167,45 +217,45 @@ export default function ReservePage() {
     return calculatePricing(facility.hourlyRate, duration, prefEvCharging);
   }, [facility, duration, prefEvCharging]);
 
-  // Handle vehicle additions
-  const handleAddVehicle = (e: React.FormEvent) => {
+  const handleAddVehicle = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newVehLabel.trim() || !newVehReg.trim()) {
       triggerToast('Label and registration are required.', 'error');
       return;
     }
 
-    const newVeh: VehicleOption = {
-      id: `veh-${Date.now()}`,
-      label: `${newVehLabel} (${newVehType})`,
-      registration: newVehReg.toUpperCase(),
-      type: newVehType,
-      isDefault: false
-    };
+    try {
+      const parts = newVehLabel.split(' ');
+      const make = parts[0] || 'Generic';
+      const model = parts.slice(1).join(' ') || 'Car';
 
-    setVehicles((prev) => [...prev, newVeh]);
-    setSelectedVehicleId(newVeh.id);
-    setNewVehLabel('');
-    setNewVehReg('');
-    setAddVehicleModalOpen(false);
-    triggerToast('Vehicle added to local registry.', 'success');
+      const res = await api.post('/api/vehicles', {
+        licensePlate: newVehReg.toUpperCase(),
+        make,
+        model,
+        type: newVehType
+      });
+
+      if (res.success) {
+        triggerToast('Vehicle registered successfully.', 'success');
+        setNewVehLabel('');
+        setNewVehReg('');
+        setAddVehicleModalOpen(false);
+        await loadData();
+      }
+    } catch (err: any) {
+      triggerToast(err.message || 'Failed to add vehicle.', 'error');
+    }
   };
 
-  // Local AI recommendations computed properties
   const aiRecommendation = React.useMemo(() => {
     if (!activeFloor || activeFloor.slots.length === 0) return null;
-    
-    // Find first available slot on this floor
     let slot = activeFloor.slots.find((s) => s.state === 'AVAILABLE');
-    
-    // If EV is preferred, prioritize EV slots
     if (prefEvCharging) {
       const evSlot = activeFloor.slots.find((s) => s.state === 'AVAILABLE' && s.isEV);
       if (evSlot) slot = evSlot;
     }
-
     if (!slot) return null;
-
     const shortId = slot.id.split('-').pop() || slot.id;
     return {
       slotId: slot.id,
@@ -215,7 +265,6 @@ export default function ReservePage() {
     };
   }, [activeFloor, prefEvCharging, prefCoveredParking, prefShorterWalk]);
 
-  // Apply AI recommended slot helper
   const handleApplyRecommended = () => {
     if (aiRecommendation) {
       setSelectedSlotId(aiRecommendation.slotId);
@@ -223,7 +272,6 @@ export default function ReservePage() {
     }
   };
 
-  // Submission validation
   const validateAndProceed = () => {
     if (!selectedFacilityId) {
       triggerToast('Please select a parking facility.', 'error');
@@ -245,592 +293,492 @@ export default function ReservePage() {
       triggerToast('Please select a vehicle profile.', 'error');
       return;
     }
-
-    setStep(2); // Go to review step
+    setStep(2);
   };
 
-  // Final Confirmation Submit
-  const handleConfirmReservation = () => {
+  const handleConfirmReservation = async () => {
     if (!facility || !activeFloor) return;
 
-    const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId) || vehicles[0];
-
-    const selection: ReservationSelection = {
-      facilityId: selectedFacilityId,
-      date: reservationDate,
-      startTime,
-      duration,
-      floorId: activeFloorTab,
-      slotId: selectedSlotId,
-      vehicleId: selectedVehicleId,
-      preferences: {
-        evCharging: prefEvCharging,
-        coveredParking: prefCoveredParking,
-        shorterWalk: prefShorterWalk
-      }
-    };
-
-    const reference = `SP-DEMO-${Math.floor(10000 + Math.random() * 90000)}`;
-
-    const summary: ReservationSummary = {
-      selection,
-      facility: {
-        id: facility.id,
-        name: facility.name,
-        zone: facility.zone,
-        address: facility.address,
-        availableBays: facility.availableBays,
-        totalBays: facility.totalBays,
-        occupancyPct: facility.occupancyPct,
-        distanceKm: facility.distanceKm,
-        walkingEta: facility.walkingEta,
-        rating: facility.rating,
-        hourlyRate: facility.hourlyRate,
-        dailyRate: facility.dailyRate,
-        hasEv: facility.hasEv,
-        isCovered: facility.isCovered
-      },
-      floorLabel: activeFloor.label,
-      pricing,
-      reference,
-      createdAt: new Date().toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-    };
-
-    // Save temporary details in sessionStorage
     try {
-      sessionStorage.setItem('smartpark_pending_reservation', JSON.stringify(summary));
-      router.push('/reserve/confirmation');
-    } catch (e) {
-      triggerToast('Session storage unavailable. Unable to save reservation.', 'error');
+      const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId) || vehicles[0];
+
+      // Format ISO string start/end
+      const startHour = parseInt(startTime.split(':')[0]) || 9;
+      const startD = new Date(reservationDate);
+      startD.setHours(startHour, 0, 0, 0);
+      const endD = new Date(startD.getTime() + duration * 60 * 60 * 1000);
+
+      const res = await api.post('/api/reservations', {
+        facilityId: mapIdToBackend(facility.id),
+        slotId: selectedSlotId,
+        vehicleId: selectedVehicleId,
+        startTime: startD.toISOString(),
+        endTime: endD.toISOString(),
+        price: pricing.totalAmount
+      });
+
+      if (res.success) {
+        const selection: ReservationSelection = {
+          facilityId: selectedFacilityId,
+          date: reservationDate,
+          startTime,
+          duration,
+          floorId: activeFloorTab,
+          slotId: selectedSlotId,
+          vehicleId: selectedVehicleId,
+          preferences: {
+            evCharging: prefEvCharging,
+            coveredParking: prefCoveredParking,
+            shorterWalk: prefShorterWalk
+          }
+        };
+
+        const floorObj = facility.floors?.find((fl: any) => fl.id === activeFloorTab);
+        const floorLabel = floorObj?.label || activeFloorTab;
+
+        const summary: ReservationSummary = {
+          selection,
+          facility: {
+            id: facility.id,
+            name: facility.name,
+            zone: facility.zone,
+            address: facility.address,
+            distanceKm: facility.distanceKm,
+            walkingEta: facility.walkingEta,
+            hasEv: facility.hasEv,
+            hourlyRate: facility.hourlyRate,
+            availableBays: facility.availableBays,
+            totalBays: facility.totalBays,
+            occupancyPct: facility.occupancyPct,
+            rating: facility.rating,
+            dailyRate: facility.dailyRate,
+            isCovered: facility.isCovered
+          },
+          floorLabel,
+          pricing,
+          reference: res.data.booking?.id || res.data.reservation?.id || 'SP-DEMO',
+          createdAt: new Date().toISOString()
+        };
+
+        sessionStorage.setItem('smartpark_prototype_reservation', JSON.stringify(summary));
+        router.push('/reserve/confirmation');
+      }
+    } catch (err: any) {
+      triggerToast(err.message || 'Reservation booking transaction failed.', 'error');
     }
   };
 
-  if (isInvalidParam) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-smartBg text-smartTextPrimary flex flex-col font-sans pb-20 selection:bg-signature/20 selection:text-signature">
-        <Header />
-        <main className="flex-1 mx-auto max-w-xl w-full px-4 flex flex-col items-center justify-center text-center pt-20">
-          <div className="h-16 w-16 rounded-full bg-limited/10 border border-limited/30 flex items-center justify-center mb-6 text-limited animate-pulse">
-            <AlertTriangle className="h-8 w-8" />
-          </div>
-          <h1 className="text-xl font-bold font-display uppercase tracking-wider text-white mb-2">
-            Facility Not Found
-          </h1>
-          <p className="text-xs text-smartTextSecondary max-w-md mb-6 leading-relaxed">
-            The requested parking facility identifier "{initialFacilitySlug}" does not match any registered nodes in the SmartPark AI network.
-          </p>
-          <div className="flex gap-3">
-            <Link href="/search">
-              <Button variant="primary" size="sm" className="font-mono text-xs uppercase px-4">
-                Search Facilities
-              </Button>
-            </Link>
-            <Link href="/home">
-              <Button variant="secondary" size="sm" className="font-mono text-xs uppercase px-4">
-                Dashboard
-              </Button>
-            </Link>
-          </div>
-        </main>
+      <div className="min-h-screen bg-smartBg flex items-center justify-center font-mono text-xs text-smartTextSecondary animate-pulse">
+        Loading smart booking dashboard...
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-smartBg text-smartTextPrimary flex flex-col font-sans pb-20 selection:bg-signature/20 selection:text-signature">
+    <div className="min-h-screen bg-smartBg text-smartTextPrimary pb-20 selection:bg-signature/20 selection:text-signature">
       <Header />
 
-      <main className="flex-1 mx-auto max-w-5xl w-full px-4 sm:px-6 lg:px-8 pt-4 space-y-6">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
         
-        {/* PAGE HEADER */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-smartBorder/60">
+        {/* Step Indicator Header */}
+        <div className="flex justify-between items-center border-b border-smartBorder/40 pb-5 mb-6">
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold font-display uppercase tracking-wider text-smartTextPrimary">
-              RESERVE PARKING
+            <h1 className="text-xl sm:text-2xl font-display font-bold uppercase tracking-tight text-white flex items-center gap-2">
+              <span className="text-signature">0{step}</span> 
+              {step === 1 ? 'Configure Parking Spot' : 'Review Permit Checkout'}
             </h1>
-            <p className="text-xs sm:text-sm text-smartTextSecondary">
-              Secure a parking bay before demand increases.
+            <p className="text-[10.5px] text-smartTextSecondary mt-0.5 font-sans">
+              {step === 1 ? 'Dynamic slot routing, time bounds selection, and physical telemetry assignments.' : 'Verify transaction price limits, slot bookings, and plate authorization.'}
             </p>
           </div>
 
-          <div className="flex items-center gap-4 text-xs font-mono">
-            <div className="bg-smartSurface border border-smartBorder px-3 py-1.5 rounded-full flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-signature animate-pulse" />
-              <span>PROTOTYPE ON</span>
-            </div>
-            
-            {/* STEP INDICATOR */}
-            <div className="flex items-center gap-1.5 font-bold uppercase">
-              <span className={step === 1 ? 'text-signature' : 'text-smartTextSecondary'}>01 SELECT</span>
-              <span className="text-smartTextSecondary">→</span>
-              <span className={step === 2 ? 'text-signature' : 'text-smartTextSecondary'}>02 REVIEW</span>
-            </div>
+          <div className="flex gap-1.5 font-mono text-[9px]">
+            <span className={`px-2 py-0.5 rounded ${step === 1 ? 'bg-signature text-black font-bold' : 'bg-smartSurface text-smartTextSecondary'}`}>1. PARAMS</span>
+            <span className={`px-2 py-0.5 rounded ${step === 2 ? 'bg-signature text-black font-bold' : 'bg-smartSurface text-smartTextSecondary'}`}>2. CHECKOUT</span>
           </div>
         </div>
 
-        {/* --------------------------------------------------
-            STEP 1: SELECT RESERVATION PARAMETERS
-           -------------------------------------------------- */}
-        {step === 1 && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {step === 1 ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
-            {/* Left 2 columns form console */}
-            <div className="lg:col-span-2 space-y-6">
-              
-              {/* FACILITY SELECTION */}
-              <Card variant="default" className="space-y-4">
-                <h2 className="text-xs font-bold font-display uppercase tracking-wider text-smartTextPrimary border-b border-smartBorder/65 pb-2">
-                  1. SELECT FACILITY
-                </h2>
+            {/* Left 2 Columns: Config Form */}
+            <div className="lg:col-span-2 flex flex-col gap-6">
 
-                <div className="grid grid-cols-1 gap-3">
-                  {MOCK_FACILITY_DETAILS.map((fac) => (
-                    <div
-                      key={fac.id}
-                      onClick={() => setSelectedFacilityId(fac.id)}
-                      className={`p-4 rounded-smart border transition-all cursor-pointer flex justify-between items-center gap-4 ${
-                        selectedFacilityId === fac.id
-                          ? 'border-signature bg-signature/5 shadow-md ring-1 ring-signature/10'
-                          : 'bg-smartSurface/50 border-smartBorder/50 hover:border-smartBorder'
-                      }`}
-                    >
-                      <div className="space-y-1.5 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <strong className="text-xs text-white uppercase">{fac.name}</strong>
-                          <Badge variant="outline" className="text-[8px] font-mono">{fac.zone}</Badge>
-                        </div>
-                        <p className="text-[11px] text-smartTextSecondary truncate">{fac.address}</p>
-                        <div className="flex flex-wrap gap-1">
-                          {fac.hasEv && <Badge variant="signature" className="text-[8px]">EV LANE</Badge>}
-                          {fac.isCovered && <Badge variant="default" className="text-[8px]">COVERED</Badge>}
-                          <span className="text-[10px] font-mono font-bold text-smartTextPrimary flex items-center gap-1">
-                            ★ {fac.rating}
-                          </span>
-                        </div>
-                      </div>
+              {/* 1. SELECT FACILITY & DATE/TIME */}
+              <Card className="flex flex-col gap-4">
+                <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-smartTextSecondary border-b border-smartBorder/30 pb-2 flex items-center justify-between">
+                  <span>1. Facility & Duration Params</span>
+                  <Badge variant="signature">Realtime DB</Badge>
+                </h3>
 
-                      <div className="text-right shrink-0">
-                        <div className="font-mono font-bold text-signature text-sm">₹{fac.hourlyRate}/hr</div>
-                        <div className="text-[9px] font-mono text-smartTextSecondary">
-                          {fac.distanceKm} km ({fac.walkingEta} min walk)
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Select
+                    label="Select Target Facility"
+                    value={selectedFacilityId}
+                    onChange={(e) => {
+                      setSelectedFacilityId(e.target.value);
+                      setSelectedSlotId('');
+                      const match = facilitiesList.find(f => f.id === e.target.value);
+                      if (match) setActiveFloorTab(match.floors[0].id);
+                    }}
+                    options={facilitiesList.map((f) => ({ value: f.id, label: f.name }))}
+                  />
 
-              {/* DATE & TIME SELECTOR */}
-              <Card variant="default" className="space-y-4">
-                <h2 className="text-xs font-bold font-display uppercase tracking-wider text-smartTextPrimary border-b border-smartBorder/65 pb-2">
-                  2. PARKING TIME
-                </h2>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {/* Date Input */}
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[11px] font-sans font-semibold uppercase tracking-wider text-smartTextSecondary">
-                      Reservation Date
-                    </label>
-                    <input
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
                       type="date"
+                      label="Date"
                       value={reservationDate}
                       onChange={(e) => setReservationDate(e.target.value)}
-                      min={new Date().toISOString().split('T')[0]}
-                      className="h-9 bg-smartSurface border border-smartBorder rounded-smart px-3 text-sm text-white outline-none focus:border-signature/60"
+                      required
+                    />
+                    <Select
+                      label="Start Time"
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      options={Array.from({ length: 24 }).map((_, i) => {
+                        const val = `${i.toString().padStart(2, '0')}:00`;
+                        return { value: val, label: val };
+                      })}
                     />
                   </div>
+                </div>
 
-                  {/* Start Time */}
-                  <Select
-                    label="Start Time"
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    options={[
-                      { value: '08:00', label: '08:00 AM' },
-                      { value: '09:00', label: '09:00 AM' },
-                      { value: '10:00', label: '10:00 AM' },
-                      { value: '11:00', label: '11:00 AM' },
-                      { value: '12:00', label: '12:00 PM' },
-                      { value: '13:00', label: '01:00 PM' },
-                      { value: '14:00', label: '02:00 PM' },
-                      { value: '15:00', label: '03:00 PM' },
-                      { value: '16:00', label: '04:00 PM' },
-                      { value: '17:00', label: '05:00 PM' },
-                      { value: '18:00', label: '06:00 PM' }
-                    ]}
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-mono text-smartTextSecondary uppercase">Duration (Hours)</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="1"
+                        max="24"
+                        value={duration}
+                        onChange={(e) => setDuration(parseInt(e.target.value))}
+                        className="w-full accent-signature h-1 bg-smartBg rounded-lg cursor-pointer"
+                      />
+                      <span className="font-mono text-xs text-white font-bold w-12 shrink-0 text-right">{duration} hrs</span>
+                    </div>
+                  </div>
 
-                  {/* Duration */}
-                  <Select
-                    label="Duration"
-                    value={duration.toString()}
-                    onChange={(e) => setDuration(parseInt(e.target.value))}
-                    options={[
-                      { value: '1', label: '1 hour' },
-                      { value: '2', label: '2 hours' },
-                      { value: '3', label: '3 hours' },
-                      { value: '4', label: '4 hours' },
-                      { value: '6', label: '6 hours' },
-                      { value: '8', label: '8 hours' }
-                    ]}
-                  />
+                  <div className="bg-smartBg/60 border border-smartBorder/30 p-2.5 rounded-lg flex items-center justify-between text-[11px]">
+                    <span className="text-smartTextSecondary">Estimated Rate:</span>
+                    <span className="font-bold text-signature">₹{facility?.hourlyRate || 0} / hr</span>
+                  </div>
                 </div>
               </Card>
 
-              {/* FLOOR & SLOT SELECTION */}
-              <Card variant="default" className="space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-smartBorder/65 pb-2">
-                  <h2 className="text-xs font-bold font-display uppercase tracking-wider text-smartTextPrimary">
-                    3. SELECT FLOOR & SLOT
-                  </h2>
+              {/* 2. PREFERENCES (OPTIONAL FILTER) */}
+              <Card className="flex flex-col gap-4">
+                <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-smartTextSecondary border-b border-smartBorder/30 pb-2">
+                  2. User Preferences (AI Recommender Inputs)
+                </h3>
 
-                  {/* Floor Selector Tabs */}
-                  {facility && (
-                    <div className="flex gap-1 overflow-x-auto">
-                      {facility.floors.map((fl) => (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <label className={`flex items-center gap-2.5 border p-3 rounded-lg cursor-pointer select-none transition-all ${prefEvCharging ? 'border-signature/50 bg-signature/5 text-white' : 'border-smartBorder bg-smartSurface text-smartTextSecondary'}`}>
+                    <input type="checkbox" checked={prefEvCharging} onChange={(e) => { setPrefEvCharging(e.target.checked); setSelectedSlotId(''); }} className="accent-signature" />
+                    <div>
+                      <span className="text-[11px] font-bold block">EV Fast Charger</span>
+                      <span className="text-[9px] opacity-80 block">Requires plug slot</span>
+                    </div>
+                  </label>
+
+                  <label className={`flex items-center gap-2.5 border p-3 rounded-lg cursor-pointer select-none transition-all ${prefCoveredParking ? 'border-signature/50 bg-signature/5 text-white' : 'border-smartBorder bg-smartSurface text-smartTextSecondary'}`}>
+                    <input type="checkbox" checked={prefCoveredParking} onChange={(e) => setPrefCoveredParking(e.target.checked)} className="accent-signature" />
+                    <div>
+                      <span className="text-[11px] font-bold block">Covered Parking</span>
+                      <span className="text-[9px] opacity-80 block">Weather protection</span>
+                    </div>
+                  </label>
+
+                  <label className={`flex items-center gap-2.5 border p-3 rounded-lg cursor-pointer select-none transition-all ${prefShorterWalk ? 'border-signature/50 bg-signature/5 text-white' : 'border-smartBorder bg-smartSurface text-smartTextSecondary'}`}>
+                    <input type="checkbox" checked={prefShorterWalk} onChange={(e) => setPrefShorterWalk(e.target.checked)} className="accent-signature" />
+                    <div>
+                      <span className="text-[11px] font-bold block">Near Elevator</span>
+                      <span className="text-[9px] opacity-80 block">Shorter ETA walk</span>
+                    </div>
+                  </label>
+                </div>
+              </Card>
+
+              {/* 3. PHYSICAL DECK & SLOT MATRIX */}
+              <Card className="flex flex-col gap-4">
+                <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-smartTextSecondary border-b border-smartBorder/30 pb-2 flex justify-between items-center">
+                  <span>3. Deck Level slot Selection</span>
+                  <Badge variant="signature">Real-time occupancy</Badge>
+                </h3>
+
+                {facility ? (
+                  <div className="flex flex-col gap-4">
+                    <div className="flex gap-1 overflow-x-auto pb-1 border-b border-smartBorder/30">
+                      {facility.floors.map((floor) => (
                         <button
-                          key={fl.id}
-                          type="button"
-                          onClick={() => setActiveFloorTab(fl.id)}
-                          className={`text-xs px-3 py-1 rounded font-mono font-bold uppercase transition-all shrink-0 border ${
-                            activeFloorTab === fl.id
-                              ? 'bg-signature border-signature text-smartBg'
-                              : 'bg-smartSurface border-smartBorder text-smartTextSecondary hover:text-smartTextPrimary'
+                          key={floor.id}
+                          onClick={() => { setActiveFloorTab(floor.id); setSelectedSlotId(''); }}
+                          className={`px-3 py-1.5 rounded-t text-[10px] font-mono uppercase tracking-wider transition-all border-b-2 ${
+                            activeFloorTab === floor.id
+                              ? 'border-signature text-signature bg-smartSurface font-bold'
+                              : 'border-transparent text-smartTextSecondary hover:text-white'
                           }`}
                         >
-                          {fl.id}
+                          {floor.label}
                         </button>
                       ))}
                     </div>
-                  )}
-                </div>
 
-                {activeFloor && (
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center text-xs font-mono bg-smartBg/60 p-2 border border-smartBorder rounded-smart">
-                      <span className="text-smartTextSecondary">{activeFloor.label}</span>
-                      <span className="text-available font-bold">{activeFloor.availableBays} bays open</span>
-                    </div>
+                    {activeFloor ? (
+                      <div className="flex flex-col gap-4">
+                        <p className="text-[10px] text-smartTextSecondary font-sans">
+                          {activeFloor.description}
+                        </p>
 
-                    {/* Slot selection grid */}
-                    <div className="flex flex-wrap gap-2.5 justify-center py-4 bg-smartBg/40 border border-dashed border-smartBorder rounded-smart">
-                      {activeFloor.slots.map((slot) => {
-                        const isSlotSelected = selectedSlotId === slot.id;
-                        
-                        // EV filter alignment
-                        const isRecommendedEv = prefEvCharging && slot.isEV && slot.state === 'AVAILABLE';
+                        <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 bg-smartBg/70 p-4 rounded-xl border border-smartBorder/80 max-h-72 overflow-y-auto">
+                          {activeFloor.slots.map((s) => {
+                            const short = s.id.split('-').pop() || s.id;
+                            const isSelected = selectedSlotId === s.id;
+                            const isSlotEV = s.isEV;
+                            const isDisabled = s.isDisabled;
+                            const isOccupied = s.state === 'OCCUPIED';
+                            const isReserved = s.state === 'RESERVED';
 
-                        return (
-                          <div key={slot.id} className="relative">
-                            <ParkingSlot
-                              id={slot.id.split('-').pop() || slot.id}
-                              state={isSlotSelected ? 'SELECTED' : slot.state}
-                              onClick={() => setSelectedSlotId(slot.id)}
-                              className={isRecommendedEv ? 'ring-2 ring-signature ring-offset-2 ring-offset-smartBg' : ''}
-                            />
-                            {slot.isEV && (
-                              <span className="absolute top-1 right-1 h-3.5 w-3.5 rounded-full bg-signature/10 border border-signature flex items-center justify-center pointer-events-none">
-                                <Zap className="h-2 w-2 text-signature" />
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                            let bgClass = 'border-smartBorder hover:border-smartBorder/90 bg-smartSurface';
+                            let textClass = 'text-white';
+
+                            if (isDisabled) {
+                              bgClass = 'border-smartBorder/30 bg-smartBg opacity-35 cursor-not-allowed';
+                              textClass = 'text-smartTextSecondary';
+                            } else if (isOccupied) {
+                              bgClass = 'border-occupied/30 bg-occupied/10 cursor-not-allowed';
+                              textClass = 'text-occupied';
+                            } else if (isReserved) {
+                              bgClass = 'border-aiBlue/30 bg-aiBlue/10 cursor-not-allowed';
+                              textClass = 'text-aiBlue';
+                            } else if (isSelected) {
+                              bgClass = 'border-signature bg-signature/20 shadow-md shadow-signature/10';
+                              textClass = 'text-signature font-bold';
+                            } else if (isSlotEV) {
+                              bgClass = 'border-available/40 bg-available/5 hover:border-available';
+                              textClass = 'text-available';
+                            }
+
+                            return (
+                              <button
+                                key={s.id}
+                                type="button"
+                                disabled={isDisabled || isOccupied || isReserved}
+                                onClick={() => setSelectedSlotId(s.id)}
+                                className={`h-11 border rounded-smart-sm flex flex-col justify-center items-center text-[9px] font-mono transition-all relative ${bgClass} ${textClass}`}
+                              >
+                                <span>{short}</span>
+                                {isSlotEV && <Zap className="h-2.5 w-2.5 mt-0.5 text-available shrink-0" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <div className="flex flex-wrap gap-4 text-[9px] font-mono text-smartTextSecondary/80 pt-1 border-t border-smartBorder/30">
+                          <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded bg-smartSurface border border-smartBorder" /> Available</span>
+                          <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded bg-signature/20 border border-signature" /> Selected</span>
+                          <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded bg-occupied/10 border border-occupied/30" /> Occupied (IoT)</span>
+                          <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded bg-aiBlue/10 border border-aiBlue/30" /> Reserved</span>
+                          <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded bg-smartBg border border-smartBorder/20 opacity-30" /> Disabled</span>
+                          <span className="flex items-center gap-1.5"><Zap className="h-3 w-3 text-available" /> EV Charging Ready</span>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
-                )}
+                ) : null}
               </Card>
 
-              {/* VEHICLE SELECTION */}
-              <Card variant="default" className="space-y-4">
-                <div className="flex items-center justify-between border-b border-smartBorder/65 pb-2">
-                  <h2 className="text-xs font-bold font-display uppercase tracking-wider text-smartTextPrimary">
-                    4. VEHICLE REGISTER
-                  </h2>
+              {/* 4. VEHICLE REGISTER */}
+              <Card className="flex flex-col gap-4">
+                <div className="flex justify-between items-center border-b border-smartBorder/30 pb-2">
+                  <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-smartTextSecondary">
+                    4. Authorized Vehicle Profile
+                  </h3>
                   <Button
-                    variant="secondary"
+                    variant="ghost"
                     size="sm"
-                    className="text-[10px] h-7 gap-1"
                     onClick={() => setAddVehicleModalOpen(true)}
+                    className="text-signature hover:text-signature/80 hover:bg-signature/5"
                   >
-                    <Plus className="h-3.5 w-3.5" />
+                    <Plus className="h-3 w-3 mr-1" />
                     ADD VEHICLE
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  {vehicles.map((v) => (
-                    <div
-                      key={v.id}
-                      onClick={() => setSelectedVehicleId(v.id)}
-                      className={`p-3.5 rounded-smart border cursor-pointer flex items-center justify-between ${
-                        selectedVehicleId === v.id
-                          ? 'border-signature bg-signature/5'
-                          : 'bg-smartSurface/50 border-smartBorder/50'
-                      }`}
-                    >
-                      <div className="space-y-1">
-                        <strong className="text-white block font-semibold">{v.label}</strong>
-                        <span className="font-mono text-smartTextSecondary text-[10px] bg-smartBg px-1.5 py-0.5 rounded border border-smartBorder/70">
-                          REG: {v.registration}
-                        </span>
-                      </div>
-                      <Car className={`h-5 w-5 ${selectedVehicleId === v.id ? 'text-signature' : 'text-smartTextSecondary'}`} />
-                    </div>
-                  ))}
-                </div>
+                {vehicles.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {vehicles.map((v) => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => setSelectedVehicleId(v.id)}
+                        className={`p-4 border rounded-smart-lg text-left transition-all flex items-center justify-between gap-4 ${
+                          selectedVehicleId === v.id
+                            ? 'border-signature bg-signature/5 text-white'
+                            : 'border-smartBorder bg-smartSurface text-smartTextSecondary hover:border-smartBorder/80 hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Car className={`h-5 w-5 ${selectedVehicleId === v.id ? 'text-signature' : 'text-smartTextSecondary'}`} />
+                          <div>
+                            <span className="text-[11px] font-bold block">{v.label}</span>
+                            <span className="text-[10px] font-mono opacity-80 block">{v.registration}</span>
+                          </div>
+                        </div>
+                        <Badge variant={v.type === 'EV' ? 'available' : 'default'} className="text-[8px] font-mono uppercase tracking-wider">
+                          {v.type}
+                        </Badge>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 border border-dashed border-smartBorder/60 rounded-lg">
+                    <p className="text-[10px] text-smartTextSecondary font-sans">No vehicles registered on this account.</p>
+                    <Button variant="secondary" size="sm" onClick={() => setAddVehicleModalOpen(true)} className="mt-2 text-[10px] uppercase font-semibold">
+                      Add Vehicle
+                    </Button>
+                  </div>
+                )}
               </Card>
 
-              {/* PREFERENCES & AI RECOMMENDATIONS */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                
-                {/* PREFERENCES CHECKBOXES */}
-                <Card variant="default" className="space-y-3">
-                  <h3 className="text-xs font-bold font-display uppercase tracking-wider text-smartTextPrimary border-b border-smartBorder/65 pb-1.5">
-                    PARKING PREFERENCES
-                  </h3>
+            </div>
 
-                  <div className="space-y-2 text-xs">
-                    <label className="flex items-center gap-2.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={prefEvCharging}
-                        onChange={(e) => setPrefEvCharging(e.target.checked)}
-                        className="h-4 w-4 bg-smartSurface border border-smartBorder text-signature rounded focus:ring-0"
-                      />
-                      <span>Require EV Charging Point</span>
-                    </label>
-
-                    <label className="flex items-center gap-2.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={prefCoveredParking}
-                        onChange={(e) => setPrefCoveredParking(e.target.checked)}
-                        className="h-4 w-4 bg-smartSurface border border-smartBorder text-signature rounded focus:ring-0"
-                      />
-                      <span>Prefer Weather Protected Deck</span>
-                    </label>
-
-                    <label className="flex items-center gap-2.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={prefShorterWalk}
-                        onChange={(e) => setPrefShorterWalk(e.target.checked)}
-                        className="h-4 w-4 bg-smartSurface border border-smartBorder text-signature rounded focus:ring-0"
-                      />
-                      <span>Prioritize Proximity to Elevators</span>
-                    </label>
+            {/* Right Column: AI Intel Recommendations */}
+            <div className="flex flex-col gap-6">
+              
+              {/* Recommended Tip */}
+              {aiRecommendation ? (
+                <Card className="bg-gradient-to-br from-smartSurface to-signature/5 border-signature/20">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded bg-signature/10 text-signature shrink-0">
+                      <Sparkles className="h-4.5 w-4.5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-white uppercase">AI Routing Recommender</h4>
+                      <p className="text-[10.5px] text-smartTextSecondary mt-1 leading-relaxed">
+                        Based on your filter metrics, we recommend booking slot <span className="text-white font-bold font-mono">{aiRecommendation.shortId}</span> on floor <span className="text-white font-mono">{activeFloorTab}</span>.
+                      </p>
+                      
+                      <div className="flex items-center gap-3 mt-3">
+                        <span className="text-[10px] font-mono text-signature font-bold">{aiRecommendation.score}% Match Score</span>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={handleApplyRecommended}
+                          className="text-[9px] uppercase tracking-wider font-bold py-1 px-3"
+                        >
+                          Apply Slot
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </Card>
+              ) : null}
 
-                {/* AI RECOMMENDS CARD */}
-                {aiRecommendation ? (
-                  <Card variant="elevated" className="border-aiBlue/30 bg-smartSurface/50 space-y-3.5">
-                    <div className="flex items-center justify-between border-b border-smartBorder pb-2">
-                      <span className="flex items-center gap-1.5 text-xs font-bold font-display uppercase tracking-wider text-aiBlue">
-                        <Sparkles className="h-4 w-4" />
-                        SMARTPARK RECOMMENDS
+              {/* Checkout Summary panel */}
+              <Card className="sticky top-6 flex flex-col gap-4 justify-between min-h-[300px]">
+                <div className="flex flex-col gap-4">
+                  <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-smartTextSecondary border-b border-smartBorder/30 pb-2">
+                    Checkout Summary
+                  </h3>
+
+                  <div className="flex flex-col gap-2.5 font-mono text-[10.5px]">
+                    <div className="flex justify-between border-b border-smartBorder/20 pb-1.5">
+                      <span className="text-smartTextSecondary">Facility:</span>
+                      <span className="text-white font-bold truncate max-w-[150px]">{facility?.name || 'Not Selected'}</span>
+                    </div>
+                    <div className="flex justify-between border-b border-smartBorder/20 pb-1.5">
+                      <span className="text-smartTextSecondary">Date & Time:</span>
+                      <span className="text-white font-bold">{reservationDate ? `${reservationDate} @ ${startTime}` : 'Not Selected'}</span>
+                    </div>
+                    <div className="flex justify-between border-b border-smartBorder/20 pb-1.5">
+                      <span className="text-smartTextSecondary">Duration:</span>
+                      <span className="text-white font-bold">{duration} hours</span>
+                    </div>
+                    <div className="flex justify-between border-b border-smartBorder/20 pb-1.5">
+                      <span className="text-smartTextSecondary">Floor Bay:</span>
+                      <span className="text-signature font-bold">{selectedSlotId ? `${selectedSlotId.split('-').pop()} (${activeFloorTab})` : 'Not Selected'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-smartTextSecondary">Vehicle:</span>
+                      <span className="text-white font-bold truncate max-w-[150px]">
+                        {selectedVehicleId ? vehicles.find((v) => v.id === selectedVehicleId)?.label : 'Not Selected'}
                       </span>
-                      <span className="text-[10px] font-mono font-bold text-signature bg-signature/10 border border-signature/30 px-2 py-0.5 rounded">
-                        Score: {aiRecommendation.score}%
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-smartTextSecondary leading-relaxed">
-                      "{aiRecommendation.reason}"
-                    </p>
-
-                    <div className="flex justify-end pt-1">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={handleApplyRecommended}
-                        className="text-[10px] h-8"
-                      >
-                        Apply Recommendation
-                      </Button>
-                    </div>
-                  </Card>
-                ) : (
-                  <div className="bg-smartSurface/30 border border-dashed border-smartBorder p-4 rounded-smart text-center text-xs text-smartTextSecondary">
-                    Select a floor to generate slot recommendations.
-                  </div>
-                )}
-
-              </div>
-
-            </div>
-
-            {/* STICKY SIDEBAR RESERVATION SUMMARY */}
-            <div className="space-y-6 lg:sticky lg:top-24">
-              <Card variant="elevated" className="border-signature/20 bg-smartSurface/70 space-y-5">
-                <h3 className="text-xs font-bold font-display uppercase tracking-wider text-smartTextPrimary border-b border-smartBorder pb-2">
-                  SUMMARY BREAKDOWN
-                </h3>
-
-                {facility && (
-                  <div className="space-y-4 text-xs font-sans">
-                    
-                    {/* Items */}
-                    <div className="space-y-2 text-smartTextSecondary">
-                      <div className="flex justify-between">
-                        <span>Facility</span>
-                        <strong className="text-white uppercase text-[11px] truncate max-w-[150px]">{facility.name}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Floor Level</span>
-                        <strong className="text-white font-mono">{activeFloorTab || 'Not Selected'}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Assigned Slot</span>
-                        <strong className="text-signature font-mono">
-                          {selectedSlotId ? (selectedSlotId.split('-').pop() || selectedSlotId) : 'Not Selected'}
-                        </strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Date / Start</span>
-                        <strong className="text-white">{reservationDate} @ {startTime}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Duration</span>
-                        <strong className="text-white">{duration} hrs</strong>
-                      </div>
-                    </div>
-
-                    {/* Pricing */}
-                    <div className="pt-4 border-t border-smartBorder/45 space-y-2">
-                      <div className="flex justify-between text-smartTextSecondary">
-                        <span>Base parking charge</span>
-                        <span className="font-mono">₹{pricing.baseAmount - (prefEvCharging ? 20 : 0)}</span>
-                      </div>
-                      {prefEvCharging && (
-                        <div className="flex justify-between text-signature">
-                          <span>EV Supercharger Surcharge</span>
-                          <span className="font-mono">+₹20</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between text-smartTextSecondary">
-                        <span>Platform service fee</span>
-                        <span className="font-mono">₹{pricing.serviceFee}</span>
-                      </div>
-                      <div className="flex justify-between text-smartTextSecondary">
-                        <span>Convenience fee</span>
-                        <span className="font-mono">₹{pricing.convenienceFee}</span>
-                      </div>
-                      <div className="flex justify-between pt-3 border-t border-smartBorder font-bold text-sm text-signature">
-                        <span>TOTAL</span>
-                        <span className="font-mono">₹{pricing.totalAmount}</span>
-                      </div>
-                    </div>
-
-                    <div className="pt-2">
-                      <Button
-                        variant="primary"
-                        onClick={validateAndProceed}
-                        className="w-full text-xs h-10 justify-center gap-1.5"
-                      >
-                        REVIEW RESERVATION
-                        <ArrowRight className="h-4 w-4" />
-                      </Button>
                     </div>
                   </div>
-                )}
+                </div>
+
+                <div className="flex flex-col gap-4 border-t border-smartBorder/30 pt-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-mono text-white uppercase font-bold">Total (INR)</span>
+                    <span className="text-lg font-bold text-signature font-mono">₹{pricing.totalAmount}</span>
+                  </div>
+
+                  <Button
+                    variant="primary"
+                    onClick={validateAndProceed}
+                    className="w-full text-xs h-10 justify-center font-bold tracking-wider uppercase gap-1"
+                  >
+                    PROCEED TO CHECKOUT
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </Card>
+
             </div>
-
           </div>
-        )}
-
-        {/* --------------------------------------------------
-            STEP 2: REVIEW RESERVATION PREVIEW
-           -------------------------------------------------- */}
-        {step === 2 && facility && activeFloor && (
-          <div className="max-w-2xl mx-auto space-y-6">
-            
-            <Card variant="elevated" className="border-signature/30 bg-smartSurface/90 p-6 space-y-6">
+        ) : (
+          <div className="max-w-xl mx-auto">
+            <Card className="flex flex-col gap-6 p-6">
               
-              <div className="flex items-center gap-2 border-b border-smartBorder pb-3">
-                <IconButton variant="ghost" size="sm" onClick={() => setStep(1)}>
-                  <ChevronLeft className="h-4 w-4" />
-                </IconButton>
-                <h2 className="text-base font-bold font-display uppercase tracking-wider text-smartTextPrimary">
-                  REVIEW RESERVATION DETAILS
-                </h2>
+              <div className="flex items-center gap-3 border-b border-smartBorder/30 pb-4">
+                <button
+                  onClick={() => setStep(1)}
+                  className="p-1.5 rounded hover:bg-smartBg text-smartTextSecondary hover:text-white transition-all"
+                >
+                  <ChevronLeft className="h-4.5 w-4.5" />
+                </button>
+                <div>
+                  <h3 className="text-[13px] font-sans font-bold text-white uppercase">Confirm Parking spot booking</h3>
+                  <span className="text-[9.5px] text-smartTextSecondary font-mono uppercase">Reference checkout</span>
+                </div>
               </div>
 
-              {/* Review details grid */}
-              <div className="divide-y divide-smartBorder/45 text-xs font-sans">
-                
-                <div className="py-3 flex justify-between gap-4">
-                  <span className="text-smartTextSecondary font-mono uppercase tracking-wider">Facility</span>
-                  <div className="text-right">
-                    <strong className="text-white block uppercase">{facility.name}</strong>
-                    <span className="text-smartTextSecondary text-[10px]">{facility.address}</span>
-                  </div>
+              {/* Booking metadata */}
+              <div className="bg-smartBg/60 border border-smartBorder/45 p-4 rounded-xl flex flex-col gap-3 font-mono text-[11px]">
+                <div className="flex justify-between border-b border-smartBorder/30 pb-2">
+                  <span className="text-smartTextSecondary">Selected Garage:</span>
+                  <span className="text-white font-bold">{facility?.name}</span>
                 </div>
-
-                <div className="py-3 flex justify-between">
-                  <span className="text-smartTextSecondary font-mono uppercase tracking-wider">Floor & Bay</span>
-                  <strong className="text-signature font-mono">
-                    {activeFloor.label} (Slot {selectedSlotId ? (selectedSlotId.split('-').pop() || selectedSlotId) : ''})
-                  </strong>
+                <div className="flex justify-between border-b border-smartBorder/30 pb-2">
+                  <span className="text-smartTextSecondary">Address:</span>
+                  <span className="text-white text-right max-w-[200px] truncate">{facility?.address}</span>
                 </div>
-
-                <div className="py-3 flex justify-between">
-                  <span className="text-smartTextSecondary font-mono uppercase tracking-wider">Time Window</span>
-                  <strong className="text-white">
-                    {reservationDate} | {startTime} ({duration} hours duration)
-                  </strong>
+                <div className="flex justify-between border-b border-smartBorder/30 pb-2">
+                  <span className="text-smartTextSecondary">Date & Time:</span>
+                  <span className="text-white font-bold">{reservationDate} at {startTime}</span>
                 </div>
-
-                <div className="py-3 flex justify-between">
-                  <span className="text-smartTextSecondary font-mono uppercase tracking-wider">Vehicle Profile</span>
-                  <strong className="text-white">
-                    {vehicles.find((v) => v.id === selectedVehicleId)?.label}
-                  </strong>
+                <div className="flex justify-between border-b border-smartBorder/30 pb-2">
+                  <span className="text-smartTextSecondary">Assigned Bay:</span>
+                  <span className="text-signature font-bold">Slot {selectedSlotId.split('-').pop()} ({activeFloorTab})</span>
                 </div>
-
-                <div className="py-3 flex justify-between">
-                  <span className="text-smartTextSecondary font-mono uppercase tracking-wider">Preferences Matched</span>
-                  <div className="flex gap-1.5">
-                    {prefEvCharging && <Badge variant="signature">EV</Badge>}
-                    {prefCoveredParking && <Badge variant="default">COVERED</Badge>}
-                    {prefShorterWalk && <Badge variant="outline">PROXIMITY</Badge>}
-                    {!prefEvCharging && !prefCoveredParking && !prefShorterWalk && (
-                      <span className="text-smartTextSecondary">None selected</span>
-                    )}
-                  </div>
+                <div className="flex justify-between border-b border-smartBorder/30 pb-2">
+                  <span className="text-smartTextSecondary">Vehicle Reg:</span>
+                  <span className="text-white font-bold font-mono">{vehicles.find((v) => v.id === selectedVehicleId)?.registration}</span>
                 </div>
-
-                {/* Final pricing info */}
-                <div className="py-4 pt-6 space-y-2">
-                  <div className="flex justify-between text-smartTextSecondary">
-                    <span>Base Fare ({duration} hrs)</span>
-                    <span className="font-mono">₹{pricing.baseAmount}</span>
-                  </div>
-                  <div className="flex justify-between text-smartTextSecondary">
-                    <span>Platform Fee + Service Taxes</span>
-                    <span className="font-mono">₹{pricing.serviceFee + pricing.convenienceFee}</span>
-                  </div>
-                  <div className="flex justify-between pt-3 border-t border-smartBorder font-bold text-base text-signature">
-                    <span>FINAL TOTAL</span>
-                    <span className="font-mono">₹{pricing.totalAmount}</span>
-                  </div>
+                <div className="flex justify-between">
+                  <span className="text-smartTextSecondary">Charge Limit:</span>
+                  <span className="text-available font-bold font-mono">₹{pricing.totalAmount} (₹{facility?.hourlyRate}/hr)</span>
                 </div>
-
               </div>
 
-              <div className="p-3.5 bg-smartBg border border-smartBorder rounded-smart flex items-start gap-3 text-xs text-smartTextSecondary leading-relaxed">
-                <Info className="h-4 w-4 text-signature shrink-0 mt-0.5" />
-                <p>
-                  This is a prototype confirmation step. Clicking "CONFIRM RESERVATION" will mock checkout actions and generate a prototype digital parking pass for this session. No monetary charge is made.
+              <div className="flex gap-3 items-start bg-signature/5 border border-signature/20 p-3 rounded-lg">
+                <Shield className="h-5 w-5 text-signature shrink-0 mt-0.5" />
+                <p className="text-[10px] text-smartTextSecondary leading-relaxed">
+                  Clicking "CONFIRM RESERVATION" will write this reservation and booking transaction into Supabase, update physical slot occupancy states, and issue your digital permit.
                 </p>
               </div>
 
@@ -855,13 +803,11 @@ export default function ReservePage() {
               </div>
 
             </Card>
-
           </div>
         )}
 
       </main>
 
-      {/* ADD VEHICLE MODAL */}
       <Modal
         isOpen={addVehicleModalOpen}
         onClose={() => setAddVehicleModalOpen(false)}
@@ -892,9 +838,8 @@ export default function ReservePage() {
             onChange={(e) => setNewVehType(e.target.value)}
             options={[
               { value: 'EV', label: 'Electric Vehicle (EV)' },
-              { value: 'Petrol', label: 'Petrol Engine' },
-              { value: 'Diesel', label: 'Diesel Engine' },
-              { value: 'CNG', label: 'CNG Engine' }
+              { value: 'GAS', label: 'Petrol/Gas Engine' },
+              { value: 'HYBRID', label: 'Hybrid Drive' }
             ]}
           />
 
@@ -920,7 +865,6 @@ export default function ReservePage() {
         </form>
       </Modal>
 
-      {/* TOAST SYSTEM */}
       <Toast
         isOpen={toastOpen}
         onClose={() => setToastOpen(false)}

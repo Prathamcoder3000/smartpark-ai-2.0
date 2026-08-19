@@ -1,3 +1,5 @@
+import { api } from './api';
+
 export interface User {
   id: string;
   email: string;
@@ -30,105 +32,124 @@ export interface AuthResponse {
   error?: string;
 }
 
-/**
- * Isolated Authentication Service abstraction.
- * This mock implementation simulates network latency and validates inputs locally.
- * Swap this out with real backend API calls (REST/GraphQL/Supabase/Firebase) seamlessly in future.
- */
 class AuthService {
   private static STORAGE_KEY = 'smartpark_auth_session';
 
-  /**
-   * Mock login attempt
-   */
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    // Simulate network latency (800ms)
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    try {
+      const response = await api.post('/api/auth/login', {
+        email: credentials.email,
+        password: credentials.password
+      });
 
-    const email = credentials.email.trim().toLowerCase();
+      if (!response.success) {
+        return {
+          success: false,
+          error: response.error?.message || 'Login failed.'
+        };
+      }
 
-    // Basic mock authentication rules
-    if (credentials.password === 'error') {
+      const { user, token } = response.data;
+
+      // Determine role: try checking if operator dashboard is accessible
+      // To avoid synchronous blocking, let's see if operator list is accessible.
+      // We can also check email pattern or check operator table on backend.
+      // Let's check operator dashboard asynchronously or check if they are seeded.
+      let role: 'operator' | 'driver' | 'admin' = 'driver';
+      try {
+        const opCheck = await fetch('http://localhost:8001/api/operator/dashboard', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (opCheck.ok) {
+          role = 'operator';
+        }
+      } catch {
+        role = 'driver';
+      }
+
+      const appUser: User = {
+        id: user.id,
+        email: user.email,
+        name: user.name || user.email.split('@')[0],
+        role
+      };
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(
+          AuthService.STORAGE_KEY,
+          JSON.stringify({
+            authenticated: true,
+            token,
+            userId: appUser.id,
+            email: appUser.email,
+            name: appUser.name,
+            role: appUser.role
+          })
+        );
+      }
+
+      return {
+        success: true,
+        user: appUser
+      };
+    } catch (err: any) {
       return {
         success: false,
-        error: 'Invalid credentials. Please verify your email and password.',
+        error: err.message || 'Invalid email or password.'
       };
     }
-
-    if (credentials.password.length < 6) {
-      return {
-        success: false,
-        error: 'Password must be at least 6 characters long.',
-      };
-    }
-
-    const mockUser: User = {
-      id: `usr_${Math.random().toString(36).substring(2, 9)}`,
-      email: email,
-      name: email.split('@')[0].replace(/[^a-zA-Z0-9]/g, ' ') || 'SmartPark User',
-      role: 'operator',
-    };
-
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(
-        AuthService.STORAGE_KEY,
-        JSON.stringify({
-          authenticated: true,
-          userId: mockUser.id,
-          email: mockUser.email,
-        })
-      );
-    }
-
-    return {
-      success: true,
-      user: mockUser,
-    };
   }
 
-  /**
-   * Mock signup attempt
-   */
   async signUp(credentials: SignUpCredentials): Promise<AuthResponse> {
-    // Simulate network latency (900ms)
-    await new Promise((resolve) => setTimeout(resolve, 900));
+    try {
+      const response = await api.post('/api/auth/signup', {
+        name: credentials.name,
+        email: credentials.email,
+        password: credentials.password
+      });
 
-    const email = credentials.email.trim().toLowerCase();
+      if (!response.success) {
+        return {
+          success: false,
+          error: response.error?.message || 'Signup failed.'
+        };
+      }
 
-    if (email === 'existing@smartpark.ai') {
+      const { user, token } = response.data;
+
+      const appUser: User = {
+        id: user.id,
+        email: user.email,
+        name: user.name || user.email.split('@')[0],
+        role: 'driver' // Newly signed up users are drivers
+      };
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(
+          AuthService.STORAGE_KEY,
+          JSON.stringify({
+            authenticated: true,
+            token,
+            userId: appUser.id,
+            email: appUser.email,
+            name: appUser.name,
+            role: appUser.role
+          })
+        );
+      }
+
+      return {
+        success: true,
+        user: appUser
+      };
+    } catch (err: any) {
       return {
         success: false,
-        error: 'An account with this email address already exists.',
+        error: err.message || 'Signup failed. Email might already be taken.'
       };
     }
-
-    const mockUser: User = {
-      id: `usr_${Math.random().toString(36).substring(2, 9)}`,
-      email: email,
-      name: credentials.name.trim(),
-      role: 'driver',
-    };
-
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(
-        AuthService.STORAGE_KEY,
-        JSON.stringify({
-          authenticated: true,
-          userId: mockUser.id,
-          email: mockUser.email,
-        })
-      );
-    }
-
-    return {
-      success: true,
-      user: mockUser,
-    };
   }
 
-  /**
-   * Get current stored user session (if remembered)
-   */
   getCurrentUser(): User | null {
     if (typeof window === 'undefined') return null;
     try {
@@ -139,17 +160,14 @@ class AuthService {
       return {
         id: session.userId || 'demo-user',
         email: session.email || 'demo@smartpark.local',
-        name: (session.email || 'demo@smartpark.local').split('@')[0].replace(/[^a-zA-Z0-9]/g, ' ') || 'SmartPark User',
-        role: 'operator',
+        name: session.name || 'SmartPark User',
+        role: session.role || 'driver'
       };
     } catch {
       return null;
     }
   }
 
-  /**
-   * Check if authenticated
-   */
   isAuthenticated(): boolean {
     if (typeof window === 'undefined') return false;
     try {
@@ -162,9 +180,6 @@ class AuthService {
     }
   }
 
-  /**
-   * Logout user session
-   */
   logout(): void {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(AuthService.STORAGE_KEY);
