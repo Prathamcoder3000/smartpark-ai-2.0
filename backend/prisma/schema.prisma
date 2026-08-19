@@ -9,9 +9,208 @@ generator client {
 }
 
 model ParkingFacility {
-  id          String   @id @default(cuid())
+  id           String             @id @default(cuid())
+  name         String
+  address      String
+  latitude     Float?
+  longitude    Float?
+  description  String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  floors       Floor[]
+  slots        ParkingSlot[]
+  operators    Operator[]         @relation("FacilityOperators")
+  telemetries  ParkingTelemetry[]
+  reservations Reservation[]
+  bookings     Booking[]
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  vehicles      Vehicle[]
+  reservations  Reservation[]
+  bookings      Booking[]
+  notifications Notification[]
+}
+
+model Vehicle {
+  id           String        @id @default(cuid())
+  licensePlate String        @unique
+  make         String?
+  model        String?
+  color        String?
+  isEV         Boolean       @default(false)
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  reservations Reservation[]
+
+  @@index([userId])
+}
+
+model Floor {
+  id          String             @id @default(cuid())
   name        String
-  address     String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  level       Int
+  facilityId  String
+  facility    ParkingFacility    @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  slots       ParkingSlot[]
+  telemetries ParkingTelemetry[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@unique([facilityId, level])
+  @@unique([facilityId, name])
+  @@index([facilityId])
+}
+
+enum ParkingSlotStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+  DISABLED
+}
+
+model ParkingSlot {
+  id           String             @id @default(cuid())
+  slotNumber   String
+  status       ParkingSlotStatus  @default(AVAILABLE)
+  isEVCharging Boolean            @default(false)
+  facilityId   String
+  facility     ParkingFacility    @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  floorId      String?
+  floor        Floor?             @relation(fields: [floorId], references: [id], onDelete: SetNull)
+  reservations Reservation[]
+  bookings     Booking[]
+  telemetries  ParkingTelemetry[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@unique([facilityId, slotNumber])
+  @@index([facilityId])
+  @@index([floorId])
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+  COMPLETED
+}
+
+model Reservation {
+  id         String            @id @default(cuid())
+  userId     String
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  facilityId String
+  facility   ParkingFacility   @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  slotId     String
+  slot       ParkingSlot       @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  vehicleId  String?
+  vehicle    Vehicle?          @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  startTime  DateTime
+  endTime    DateTime
+  status     ReservationStatus @default(PENDING)
+  price      Float
+  bookings   Booking[]
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  @@index([userId])
+  @@index([facilityId])
+  @@index([slotId])
+  @@index([vehicleId])
+  @@index([startTime, endTime])
+}
+
+enum BookingStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model Booking {
+  id            String          @id @default(cuid())
+  userId        String
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  facilityId    String
+  facility      ParkingFacility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  slotId        String
+  slot          ParkingSlot     @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  reservationId String?
+  reservation   Reservation?    @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  entryTime     DateTime?
+  exitTime      DateTime?
+  finalAmount   Float?
+  status        BookingStatus   @default(ACTIVE)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([userId])
+  @@index([facilityId])
+  @@index([slotId])
+  @@index([reservationId])
+}
+
+enum NotificationType {
+  AVAILABILITY
+  BOOKING
+  AI_INSIGHT
+  SYSTEM
+  PROMOTION
+}
+
+enum NotificationPriority {
+  INFO
+  IMPORTANT
+  CRITICAL
+}
+
+model Notification {
+  id        String               @id @default(cuid())
+  userId    String
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  priority  NotificationPriority @default(INFO)
+  title     String
+  message   String
+  isRead    Boolean              @default(false)
+  createdAt DateTime             @default(now())
+
+  @@index([userId])
+}
+
+model ParkingTelemetry {
+  id            String          @id @default(cuid())
+  facilityId    String
+  facility      ParkingFacility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  floorId       String?
+  floor         Floor?          @relation(fields: [floorId], references: [id], onDelete: SetNull)
+  slotId        String?
+  slot          ParkingSlot?    @relation(fields: [slotId], references: [id], onDelete: SetNull)
+  occupancyRate Float?
+  sensorValue   String?
+  sensorType    String?
+  timestamp     DateTime        @default(now())
+
+  @@index([facilityId])
+  @@index([floorId])
+  @@index([slotId])
+  @@index([timestamp])
+}
+
+model Operator {
+  id         String            @id @default(cuid())
+  email      String            @unique
+  name       String
+  role       String            @default("OPERATOR")
+  facilities ParkingFacility[] @relation("FacilityOperators")
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
 }
