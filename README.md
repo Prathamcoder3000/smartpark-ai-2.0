@@ -1,182 +1,334 @@
 # 🚗 SmartPark AI 2.0
 
-> **Don't just find parking. Know where you should park before you arrive.**
+[![Next.js](https://img.shields.io/badge/Frontend-Next.js%2014-black?style=flat-square&logo=next.js)](https://nextjs.org/)
+[![Fastify](https://img.shields.io/badge/Backend-Fastify%205-181d21?style=flat-square&logo=fastify)](https://fastify.dev/)
+[![FastAPI](https://img.shields.io/badge/AI_Engine-FastAPI-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Prisma](https://img.shields.io/badge/ORM-Prisma-2d3748?style=flat-square&logo=prisma)](https://www.prisma.io/)
+[![PostgreSQL](https://img.shields.io/badge/Database-Supabase%20PostgreSQL-3ecf8e?style=flat-square&logo=supabase)](https://supabase.com/)
+[![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178c6?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
+[![Python](https://img.shields.io/badge/Language-Python%203-3776ab?style=flat-square&logo=python)](https://www.python.org/)
+[![Project Status](https://img.shields.io/badge/Status-Release%20Ready-success?style=flat-square)](https://github.com/Prathamcoder3000/smartpark-ai-2.0)
 
-SmartPark AI 2.0 is an intelligent parking and urban mobility platform designed to help drivers discover, evaluate, and reserve optimal parking spaces using spatial information, predictive intelligence, and personalized preferences.
-
-Finding parking in modern cities is not just a distance query—it is a temporal, economic, and convenience trade-off. Traditional parking locators only show static "current availability," which often changes by the time a driver arrives. SmartPark AI 2.0 solves this by presenting live predictive occupancy forecasts, walking ETAs, EV charging availability, and tailored AI recommendations.
+SmartPark AI 2.0 is an intelligent, production-grade parking discovery, reservation, and real-time mobility platform. It helps drivers locate optimal parking bays by combining spatial 2D floor visualizers, explainable AI recommendation algorithms, IoT ultrasonic sensor telemetry, and live multi-client server-sent events.
 
 ---
 
-## 📌 Project Status
+## 📖 Table of Contents
 
-The platform is a fully integrated, production-hardened microservices application consisting of a modern Next.js frontend, a Fastify-based backend gateway with Prisma, a FastAPI-based AI engine, and a Python-based IoT sensor simulator.
+- [Executive Overview](#-executive-overview)
+- [System Architecture](#-system-architecture)
+- [Technology Stack](#-technology-stack)
+- [Repository Structure](#-repository-structure)
+- [Database Schema](#-database-schema)
+- [Core Workflows](#-core-workflows)
+- [Advanced Features](#-advanced-features)
+  - [Rule-Based Explainable AI](#1-rule-based-explainable-ai)
+  - [IoT Telemetry Pipeline](#2-iot-telemetry-pipeline)
+  - [Real-Time SSE updates](#3-real-time-sse-updates)
+  - [Production Security & Abuse Protection](#4-production-security--abuse-protection)
+- [Installation & Local Setup](#-installation--local-setup)
+- [API Documentation](#-api-documentation)
+- [Automated Integration Tests](#-automated-integration-tests)
+- [Roadmap & engineering phases](#-roadmap--engineering-phases)
+- [License](#-license)
 
-| Area / Component | Current Implementation | Status |
-| :--- | :--- | :--- |
-| **Frontend Framework** | Next.js 14 (App Router) + TypeScript + Tailwind CSS | ✅ Complete |
-| **Backend Gateway** | Fastify 5 + TypeScript + Prisma Client | ✅ Complete |
-| **Database** | Supabase PostgreSQL + Prisma Schema | ✅ Complete |
-| **AI Engine** | FastAPI + Uvicorn + Pydantic (Rule-Based Parking Intelligence) | ✅ Complete |
-| **Telemetry Simulator** | Python IoT parking occupancy sensor simulator | ✅ Complete |
-| **Real-Time Streaming** | Server-Sent Events (SSE) + Node EventEmitter integration | ✅ Complete |
-| **System Security** | JWT Auth sessions + Bcrypt + Global Error Sanitizer | ✅ Complete |
-| **Rate Limiting** | `@fastify/rate-limit` abuse protection rules | ✅ Complete |
-| **Integration Testing** | Repeatable end-to-end Fastify integration suite | ✅ Complete |
+---
+
+## 🎯 Executive Overview
+
+Modern urban mobility requires balancing driver preferences (budget, walking distance, vehicle constraints) with real-world garage capacities. Traditional parking locators fail because static data staleness leads to arrival conflicts. 
+
+SmartPark AI 2.0 addresses this challenge by providing:
+- **Intelligent Recommendations**: A deterministic search utility incorporating driver profile settings (EV charging necessity, price cap, distance limits) to rank parking facilities.
+- **Dynamic Slot Reservation**: Users can navigate individual floors, pre-select specific bays, and reserve them.
+- **IoT-Powered Status Propagation**: Real-world slot sensors report occupancies via telemetry endpoints. Active reservations protect target bays, preventing incoming simulator state events from overwriting slots to `AVAILABLE`.
+- **Operator Metrics**: Operational views show dynamic facility telemetry, occupancy rates, and real-time floor statuses.
 
 ---
 
 ## 🏗️ System Architecture
 
-SmartPark AI 2.0 utilizes a decoupled, event-driven microservices architecture:
-
-```mermaid
-flowchart TD
-    Driver([Driver / User]) <-->|React / Next.js| Frontend[Next.js App Server :3000]
-    Frontend <-->|REST API / SSE| Backend[Fastify API Gateway :8001]
-    
-    Backend <-->|Prisma Client| DB[(Supabase PostgreSQL)]
-    Backend <-->|REST API| AIEngine[FastAPI Python Engine :8002]
-    
-    IoTSimulator[IoT Telemetry Simulator] -->|HTTP POST| Backend
-    Backend -->|EventEmitter| SSE[SSE Streaming Controller]
-    SSE -->|Live Updates / SSE| Frontend
+```text
+                  ┌──────────────────────────────────────────┐
+                  │          Next.js Web Application         │
+                  │   - App Router Pages (Search, Live Map)  │
+                  │   - SSE client streams & dynamic maps    │
+                  └────────────────────┬─────────────────────┘
+                                       │
+                              HTTP REST / SSE Stream
+                                       │
+                                       ▼
+                  ┌──────────────────────────────────────────┐
+                  │           Fastify API Gateway            │
+                  │   - User sessions (JWT/Bcrypt)           │
+                  │   - Telemetry ingestion routes           │
+                  │   - EventSource SSE broadcaster          │
+                  └──────────┬────────────────────┬──────────┘
+                             │                    │
+                      Prisma │                    │ REST Proxy
+                             ▼                    ▼
+                    ┌──────────────────┐    ┌──────────────────┐
+                    │ Supabase         │    │ FastAPI AI       │
+                    │ PostgreSQL       │    │ Recommender      │
+                    └──────────────────┘    └──────────────────┘
+                             ▲
+                             │ Telemetry updates
+                    ┌────────┴─────────┐
+                    │ IoT Simulator    │
+                    │ Telemetry Script │
+                    └──────────────────┘
 ```
 
-### Telemetry Pipeline
-1. **IoT Simulator** updates slot status via `POST /api/telemetry` or `/api/telemetry/batch`.
-2. **Fastify Gateway** verifies slot constraints, updates state in **PostgreSQL**, and emits realtime events.
-3. **SSE controller** broadcasts updates to the `/api/realtime/facilities/:id` and `/all` streams.
-4. **Next.js Frontend** receives events via `EventSource` and dynamically re-renders active map indicators.
+- **Frontend**: Next.js client-side interface fetching state from the Fastify REST proxy, monitoring SSE events to update visual layouts in real time.
+- **Backend API Gateway**: Fastify router securing sessions with JSON Web Tokens (JWT), managing Prisma transaction states, and emitting socket-free events.
+- **AI Recommendation Engine**: FastAPI Python microservice running scoring matrices to filter and order facilities.
+- **IoT Simulator**: Multi-threaded python loop reporting simulated hardware sensor changes directly to the telemetry api.
 
 ---
 
-## 🧩 Technology Stack
+## 🛠️ Technology Stack
 
 | Layer | Technology | Purpose |
 | :--- | :--- | :--- |
-| **Frontend** | Next.js 14 (App Router), React, TypeScript, Tailwind CSS, Lucide Icons | Responsive spatial visualizer, reservation panels, operator views, and profile controls. |
-| **Backend Gateway** | Fastify 5, TypeScript, jsonwebtoken, bcryptjs, `@fastify/rate-limit` | REST API endpoints, JWT session authorization, rate limiting, and event dispatch. |
-| **Database & ORM** | Prisma ORM, Supabase Cloud PostgreSQL | Schema definitions, migration management, and transaction isolation. |
-| **AI Engine** | FastAPI, Uvicorn, Python 3.9, Pydantic | Rule-based predict & recommend scoring matching user profiles. |
-| **IoT Simulation** | Python 3, requests, python-dotenv | Simulates ultrasonic garage sensors reporting slot occupancy status. |
+| **Frontend** | Next.js 14, React, Tailwind CSS, TypeScript, Lucide Icons | Responsive panels, SVG slot grids, user profile preferences, notifications overlay. |
+| **Backend API** | Fastify 5, `@fastify/rate-limit`, `@fastify/cors` | Fast JSON serialization, JWT authentication, rate limiting, and EventSource endpoints. |
+| **Database** | Supabase Cloud PostgreSQL, Prisma ORM | SQL persistence with strict indexation, cascade deletions, and relational integrity. |
+| **AI Engine** | FastAPI, Uvicorn, Python 3.9, Pydantic | Deterministic rule-based scoring and explanatory tags generation. |
+| **IoT Simulation**| Python 3, requests, python-dotenv | Mocking physical parking lot sensors with customizable targets and intervals. |
 
 ---
 
-## 📂 Directory Structure
+## 📂 Repository Structure
 
 ```text
 SmartPark-AI-2.0/
-├── frontend/             # Next.js App Router Frontend
-│   ├── app/              # Page layouts, hooks & route definitions
-│   ├── components/       # Reusable UI system components (Design Lab)
-│   ├── lib/              # Centralized API client & JWT auth services
-│   └── tailwind.config.ts# Theme & Design tokens palette
+├── frontend/             # Next.js Application Client
+│   ├── app/              # Router layouts & page views (intelligence, map, search)
+│   ├── components/       # Component Library (Header, Button, StatusBadge, Toast)
+│   └── lib/              # API services client, JWT helper, profile data fetchers
 │
-├── backend/              # Fastify API Gateway
-│   ├── src/index.ts      # Main server entry & environment validations
-│   ├── src/routes/       # Route handlers (auth, reservations, bookings, telemetry, ai)
-│   ├── src/tests/        # Integration test suites (integration.test.ts)
-│   ├── prisma/           # Prisma DB schema & seed scripts
-│   └── package.json      # Backend NPM dependencies
+├── backend/              # Fastify Gateway Service
+│   ├── src/index.ts      # App entry point, CORS configuration, Rate Limiter, Error Handler
+│   ├── src/routes/       # Domain routes (auth, facilities, reservations, bookings, operator, telemetry)
+│   ├── src/tests/        # Automated integration test flow (integration.test.ts)
+│   └── prisma/           # Prisma Client, schema.prisma models, and database seeds
 │
-├── ai-engine/            # FastAPI Python Recommendations Engine
-│   ├── app/main.py       # API endpoints & predictive logic
-│   └── requirements.txt  # Python requirements
+├── ai-engine/            # FastAPI Recommendation Microservice
+│   ├── app/main.py       # Deterministic rule-based prediction & recommendation endpoints
+│   └── requirements.txt  # Python pip dependencies
 │
-└── iot-simulator/        # IoT Telemetry Sensor Simulator
-    ├── simulator.py      # Simulator script
+└── iot-simulator/        # IoT Telemetry Simulator
+    ├── simulator.py      # Simulator loop posting slot telemetry status updates
     └── README.md         # Configuration guide
 ```
 
 ---
 
-## 🔧 Setup & Installation
+## 🗄️ Database Schema
 
-### 1. Prerequisites
-- **Node.js** (v18.x or later)
-- **Python** (v3.9 or later)
-- **PostgreSQL Database** (Supabase instance recommended)
+SmartPark AI 2.0 uses a highly structured relational schema defined via Prisma:
 
----
+```text
+  ┌──────────┐          ┌───────────┐          ┌──────────┐
+  │   User   │─────────<>│  Vehicle  │          │ Operator │
+  └────┬─────┘          └─────┬─────┘          └────┬─────┘
+       │                      │                     │
+       ├──────────────────────┼─────────────┐       │ Manages
+       │                      │             │       │
+      <›                     <›            <›       ▼
+┌─────────────┐        ┌────────────┐     ┌─────────────────┐
+│ Reservation │<>─────<>│  Booking  │     │ ParkingFacility │
+└──────┬──────┘        └─────┬──────┘     └────────┬────────┘
+       │                     │                     │
+       ├─────────────────────┘                     ├───────────┐
+       ▼                                           ▼           ▼
+┌─────────────┐                               ┌─────────┐ ┌───────────┐
+│ ParkingSlot │◄──────────────────────────────│  Floor  │ │ Telemetry │
+└─────────────┘                               └─────────┘ └───────────┘
+```
 
-### 2. Backend Installation (`:8001`)
-
-1. Navigate to backend and copy example environment:
-   ```bash
-   cd backend
-   cp .env.example .env
-   ```
-2. Update `.env` with your Supabase database credentials, JWT secret key, and AI URL:
-   ```env
-   PORT=8001
-   DATABASE_URL="postgresql://user:password@your-db-host:6543/postgres?pgbouncer=true"
-   JWT_SECRET="your-jwt-secret-here"
-   AI_ENGINE_URL="http://127.0.0.1:8002"
-   FRONTEND_URL="http://localhost:3000"
-   ADMIN_SEED_SECRET="your-seed-secret"
-   ```
-3. Install packages, run migrations, and start server:
-   ```bash
-   npm install
-   npx prisma db push
-   npm run dev
-   ```
-
----
-
-### 3. Frontend Installation (`:3000`)
-
-1. Navigate to frontend and copy environment:
-   ```bash
-   cd ../frontend
-   cp .env.example .env
-   ```
-2. Install packages and start server:
-   ```bash
-   npm install
-   npm run dev
-   ```
-3. Open [http://localhost:3000](http://localhost:3000) in your web browser.
+### Key Models:
+- **`ParkingFacility`**: Tracks location, name, floors, and associated operators.
+- **`Floor`**: Levels inside a facility (e.g., Level B1).
+- **`ParkingSlot`**: Grid bays supporting status enums (`AVAILABLE`, `OCCUPIED`, `RESERVED`, `DISABLED`) and EV charging status.
+- **`Reservation`**: Scheduled slot claims mapped to users and vehicles.
+- **`Booking`**: Checked-in occupancy records associated with an active reservation.
+- **`ParkingTelemetry`**: Sensor ingestion history capturing occupancy and signal strength values.
 
 ---
 
-### 4. AI Engine Setup (`:8002`)
+## ⚡ Advanced Features
 
-1. Navigate to ai-engine and install dependencies:
-   ```bash
-   cd ../ai-engine
-   pip install -r requirements.txt
-   ```
-2. Start the service:
-   ```bash
-   uvicorn app.main:app --port 8002 --reload
-   ```
+### 1. Rule-Based Explainable AI
+The FastAPI service evaluates parking options based on profile preferences:
+- **EV Compatibility Match**: Checks if the vehicle is electric and prioritizes slots with charging capability.
+- **Distance & Pricing Weights**: Ranks facilities using proximity scores and hourly cost metrics.
+- **Explainable Feedback**: Returns explicit justification tags (e.g., `"Short walking distance"`, `"EV Charging Compatible"`) alongside a deterministic matching percentage.
+
+### 2. IoT Telemetry Pipeline
+- Ultrasonic sensors post state reports to `POST /api/telemetry`.
+- **Reserved-Slot Protection**: If a slot status is currently `RESERVED` (owing to a user booking conversion), incoming telemetry reports indicating that a bay is vacant will **not** override the status to `AVAILABLE`, securing the driver's spot.
+
+### 3. Real-Time SSE Updates
+- Real-time updates are piped using Fastify Server-Sent Events (SSE).
+- Re-connection loops and clean event emitters are integrated in [realtime.ts](file:///d:/SmartPark-AI-2.0/backend/src/routes/realtime.ts).
+- Dynamically broadcasts occupancy modifications to target facility channels or the global dashboard view.
+
+### 4. Production Security & Abuse Protection
+- **JWT Enforced Routes**: Sensitive APIs require verification of the signed JWT bearer token.
+- **API Rate Limiting**: Global rate-limits using `@fastify/rate-limit` block brute-force attempts on `/signup`, `/login`, `/telemetry`, and `/recommend` routes.
+- **Operator Seeding Lock**: The `/seed-operator` endpoint is blocked once a database operator exists, requiring verification of `ADMIN_SEED_SECRET` headers.
+- **Sanitized Errors**: The Fastify global error handler catches internal stack traces and database details, returning structured, sanitized responses:
+  ```json
+  {
+    "success": false,
+    "error": {
+      "code": "INTERNAL_SERVER_ERROR",
+      "message": "An unexpected error occurred."
+    }
+  }
+  ```
 
 ---
 
-### 5. IoT Simulator Setup
+## 🔧 Installation & Local Setup
 
-1. Navigate to simulator and install packages:
-   ```bash
-   cd ../iot-simulator
-   pip install requests python-dotenv
-   ```
-2. Start simulator:
-   ```bash
-   python simulator.py
-   ```
+### 1. Clone & Core Setup
+```bash
+git clone https://github.com/Prathamcoder3000/smartpark-ai-2.0.git
+cd smartpark-ai-2.0
+```
+
+### 2. Fastify Backend Configuration
+```bash
+cd backend
+cp .env.example .env
+npm install
+```
+Update `.env` database URLs and JWT secrets:
+```env
+DATABASE_URL="postgresql://user:password@your-db-host:5432/postgres?pgbouncer=true"
+JWT_SECRET="generate-a-long-random-string"
+AI_ENGINE_URL="http://127.0.0.1:8002"
+FRONTEND_URL="http://localhost:3000"
+ADMIN_SEED_SECRET="your-seed-secret"
+```
+
+Push database schema & populate default data:
+```bash
+npx prisma db push
+npx prisma db seed
+```
+
+Start Fastify backend:
+```bash
+npm run dev
+```
+
+### 3. Next.js Frontend Configuration
+```bash
+cd ../frontend
+cp .env.example .env
+npm install
+npm run dev
+```
+
+### 4. FastAPI Recommender Setup
+```bash
+cd ../ai-engine
+pip install -r requirements.txt
+uvicorn app.main:app --port 8002 --reload
+```
+
+### 5. Telemetry Simulator Execution
+```bash
+cd ../iot-simulator
+pip install requests python-dotenv
+python simulator.py
+```
 
 ---
 
-## 🧪 Running Integration Tests
+## 📡 API Documentation
 
-SmartPark AI 2.0 includes an automated integration test suite checking signup, login, auth context, vehicle registration, reservation overlaps, booking states, check-in, check-out, and telemetry protection.
+### Authentication `/api/auth`
+- `POST /signup`: Register a new driver user.
+- `POST /login`: Generate driver JWT session token.
+- `GET /me`: Fetch authenticated user profile data.
 
-To run:
+### Facilities `/api/facilities`
+- `GET /`: Retrieve all active facilities.
+- `GET /:id`: Fetch metadata, floors, and slots of a specific facility.
+
+### Vehicles `/api/vehicles`
+- `POST /`: Register a vehicle (license plate, EV flag).
+- `GET /`: List driver's registered vehicles.
+- `DELETE /:id`: Remove a registered vehicle.
+
+### Reservations `/api/reservations`
+- `POST /`: Book slot schedule reservation (prevents overlapping times).
+- `GET /`: Retrieve driver's active reservations.
+- `DELETE /:id/cancel`: Cancel reservation.
+
+### Bookings `/api/bookings`
+- `POST /`: Convert reservation to active booking (slot status becomes `RESERVED`).
+- `POST /:id/check-in`: Trigger check-in (slot status becomes `OCCUPIED`).
+- `POST /:id/check-out`: Trigger check-out (slot status becomes `AVAILABLE`).
+
+### Telemetry `/api/telemetry`
+- `POST /`: Ingest single slot sensor event payload.
+- `POST /batch`: Bulk ingest telemetry updates.
+
+### AI Engine proxy `/api/ai`
+- `POST /recommend`: Proxies requests to FastAPI engine returning sorted parking options.
+
+### Realtime Streaming `/api/realtime`
+- `GET /facilities/:id`: SSE connection stream listener.
+
+### System Diagnostics
+- `GET /health`: Basic operational diagnostics status.
+- `GET /ready`: SQL query test checking active PostgreSQL database connectivity.
+
+---
+
+## 🧪 Automated Integration Tests
+
+SmartPark AI 2.0 features an automated end-to-end integration test runner validating all core routines:
+
 ```bash
 cd backend
 npx ts-node src/tests/integration.test.ts
 ```
 
-All test records are temporary and are automatically cleaned from the database upon completion.
+The test runner creates sandboxed test data, validates session states, check-in flows, double-booking protection, and automatically clears all test records from the database upon exit.
+
+---
+
+## 🛣️ Roadmap & Engineering Phases
+
+### Completed Development Phases:
+* **Phase 1: Database & Backend Foundation** - Supabase connectivity, Prisma schema definitions, Fastify server setup.
+* **Phase 2: Core Feature Implementation** - Slot search, bookings controllers, notification models.
+* **Phase 3: Service Integration** - API proxy routing, JWT token verification, dynamic dashboard feeds.
+* **Phase 4: QA Auditing & Bug Fixing** - Seeding logic isolation, overlapping reservation locks.
+* **Phase 5: Production Hardening & IoT** - Fastify rate limiting, env variable checks, Python sensor simulator.
+* **Phase 6: Release Readiness** - Global error handlers, `/ready` health diagnostics, full integration test suites.
+* **Phase 7: Final Release Validation** - Compile verifications, telemetry checks.
+
+### Future Infrastructure Work:
+* Configure automated deployment pipelines (CI/CD) for AWS/Vercel.
+* Integrate Prometheus/Grafana metrics monitoring.
+* Incorporate distributed event brokers (Kafka/RabbitMQ) to scale real-time telemetry streams.
+
+---
+
+## 📄 License
+
+License has not yet been specified.
+
+---
+
+<p align="center">
+  <b>SmartPark AI 2.0</b><br/>
+  Intelligent Parking • Real-Time Infrastructure • Explainable AI • IoT
+</p>
