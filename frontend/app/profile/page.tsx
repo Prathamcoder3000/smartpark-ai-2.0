@@ -22,7 +22,9 @@ import {
   Trash2,
   Sliders,
   CheckCircle,
+  CarFront,
 } from 'lucide-react';
+import { api } from '../../lib/api';
 import { Header } from '../../components/ui/Header';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -60,8 +62,137 @@ export default function ProfilePage() {
   const [profile, setProfile] = React.useState<UserProfile>(INITIAL_USER_PROFILE);
   const [preferences, setPreferences] = React.useState<ParkingPreferences>(INITIAL_PREFERENCES);
   const [savedFacilities, setSavedFacilities] = React.useState<SavedParkingFacility[]>(INITIAL_SAVED_PARKING);
-  const [recentBookings] = React.useState<BookingSummary[]>(INITIAL_RECENT_BOOKINGS);
+  const [recentBookings, setRecentBookings] = React.useState<any[]>([]);
   const [notifications, setNotifications] = React.useState<NotificationPreferences>(INITIAL_NOTIFICATIONS);
+
+  // Vehicles states
+  const [vehicles, setVehicles] = React.useState<any[]>([]);
+  const [loadingVehicles, setLoadingVehicles] = React.useState(true);
+  const [loadingBookings, setLoadingBookings] = React.useState(true);
+
+  // New vehicle modal states
+  const [isAddVehicleOpen, setIsAddVehicleOpen] = React.useState(false);
+  const [isEditVehicleOpen, setIsEditVehicleOpen] = React.useState(false);
+  const [selectedVehicle, setSelectedVehicle] = React.useState<any | null>(null);
+
+  // Vehicle form state
+  const [vehForm, setVehForm] = React.useState({
+    make: '',
+    model: '',
+    licensePlate: '',
+    color: '',
+    isEV: false,
+  });
+
+  const loadData = React.useCallback(async () => {
+    try {
+      setLoadingVehicles(true);
+      setLoadingBookings(true);
+
+      // Load vehicles
+      const vRes = await api.get('/api/vehicles');
+      if (vRes.success && Array.isArray(vRes.data)) {
+        setVehicles(vRes.data);
+      }
+
+      // Load bookings
+      const bRes = await api.get('/api/bookings');
+      if (bRes.success && Array.isArray(bRes.data)) {
+        const mapped = bRes.data.slice(0, 3).map((b: any) => {
+          const date = new Date(b.createdAt);
+          const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const entryTimeStr = b.entryTime ? new Date(b.entryTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'N/A';
+          const exitTimeStr = b.exitTime ? new Date(b.exitTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'N/A';
+          const priceStr = b.finalAmount !== null && b.finalAmount !== undefined ? `$${Number(b.finalAmount).toFixed(2)}` : '$5.00';
+          
+          return {
+            id: b.id,
+            facilityName: b.facility?.name || 'SmartPark Facility',
+            status: b.status,
+            date: dateStr,
+            time: `${entryTimeStr} - ${exitTimeStr}`,
+            slot: b.slot?.slotNumber || 'N/A',
+            amount: priceStr
+          };
+        });
+        setRecentBookings(mapped);
+      }
+    } catch (err) {
+      console.error('Failed to load profile data:', err);
+    } finally {
+      setLoadingVehicles(false);
+      setLoadingBookings(false);
+    }
+  }, []);
+
+  const handleAddVehicleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!vehForm.licensePlate.trim() || !vehForm.make.trim() || !vehForm.model.trim()) {
+      showToast('Make, model, and license plate are required.', 'error');
+      return;
+    }
+
+    try {
+      const res = await api.post('/api/vehicles', {
+        licensePlate: vehForm.licensePlate.toUpperCase().trim(),
+        make: vehForm.make.trim(),
+        model: vehForm.model.trim(),
+        color: vehForm.color.trim() || null,
+        isEV: vehForm.isEV,
+      });
+
+      if (res.success) {
+        showToast('Vehicle registered successfully.', 'success');
+        setIsAddVehicleOpen(false);
+        setVehForm({ make: '', model: '', licensePlate: '', color: '', isEV: false });
+        await loadData();
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Failed to register vehicle.', 'error');
+    }
+  };
+
+  const handleEditVehicleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedVehicle) return;
+    if (!vehForm.licensePlate.trim() || !vehForm.make.trim() || !vehForm.model.trim()) {
+      showToast('Make, model, and license plate are required.', 'error');
+      return;
+    }
+
+    try {
+      const res = await api.put(`/api/vehicles/${selectedVehicle.id}`, {
+        licensePlate: vehForm.licensePlate.toUpperCase().trim(),
+        make: vehForm.make.trim(),
+        model: vehForm.model.trim(),
+        color: vehForm.color.trim() || null,
+        isEV: vehForm.isEV,
+      });
+
+      if (res.success) {
+        showToast('Vehicle updated successfully.', 'success');
+        setIsEditVehicleOpen(false);
+        setSelectedVehicle(null);
+        setVehForm({ make: '', model: '', licensePlate: '', color: '', isEV: false });
+        await loadData();
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update vehicle.', 'error');
+    }
+  };
+
+  const handleDeleteVehicle = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this vehicle?')) return;
+    try {
+      const res = await api.delete(`/api/vehicles/${id}`);
+      if (res.success) {
+        showToast('Vehicle deleted successfully.', 'success');
+        await loadData();
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Failed to delete vehicle.', 'error');
+    }
+  };
 
   React.useEffect(() => {
     const authed = authService.isAuthenticated();
@@ -77,8 +208,9 @@ export default function ProfilePage() {
           email: user.email,
         }));
       }
+      loadData();
     }
-  }, [router]);
+  }, [router, loadData]);
 
   // Modal states
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
@@ -409,6 +541,80 @@ export default function ProfilePage() {
                 </Link>
               </div>
             </Card>
+
+            {/* VEHICLES REGISTRY CARD */}
+            <Card variant="default" padding="lg" className="space-y-4">
+              <div className="flex items-center justify-between border-b border-smartBorder/50 pb-3">
+                <h3 className="text-xs font-semibold font-display uppercase tracking-wider text-smartTextPrimary flex items-center gap-2">
+                  <CarFront className="h-4 w-4 text-signature" />
+                  Vehicles Registry
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setVehForm({ make: '', model: '', licensePlate: '', color: '', isEV: false });
+                    setIsAddVehicleOpen(true);
+                  }}
+                  className="h-7 text-xs text-signature"
+                >
+                  + Add
+                </Button>
+              </div>
+
+              {loadingVehicles ? (
+                <div className="text-xs text-smartTextSecondary py-4 text-center">Loading vehicles...</div>
+              ) : vehicles.length === 0 ? (
+                <div className="text-xs text-smartTextSecondary py-4 text-center">No vehicles registered.</div>
+              ) : (
+                <div className="space-y-2">
+                  {vehicles.map((v) => (
+                    <div
+                      key={v.id}
+                      className="p-3 rounded-smart bg-smartSurface/60 border border-smartBorder/60 flex items-center justify-between gap-2"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-smartTextPrimary">
+                            {v.make} {v.model}
+                          </span>
+                          {v.isEV && <Badge variant="ai">EV</Badge>}
+                        </div>
+                        <span className="text-[10px] font-mono text-smartTextSecondary block">
+                          {v.licensePlate}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <IconButton
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedVehicle(v);
+                            setVehForm({
+                              make: v.make || '',
+                              model: v.model || '',
+                              licensePlate: v.licensePlate || '',
+                              color: v.color || '',
+                              isEV: !!v.isEV,
+                            });
+                            setIsEditVehicleOpen(true);
+                          }}
+                        >
+                          <Edit3 className="h-3.5 w-3.5 text-smartTextSecondary hover:text-signature" />
+                        </IconButton>
+                        <IconButton
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteVehicle(v.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-smartTextSecondary hover:text-occupied" />
+                        </IconButton>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
           </div>
 
           {/* RIGHT COLUMN: PREFERENCES, INTELLIGENCE, SAVED, BOOKINGS & NOTIFICATIONS */}
@@ -718,8 +924,13 @@ export default function ProfilePage() {
                 </Link>
               </div>
 
-              <div className="space-y-3">
-                {recentBookings.map((booking) => (
+              {loadingBookings ? (
+                <div className="text-xs text-smartTextSecondary py-4 text-center">Loading recent bookings...</div>
+              ) : recentBookings.length === 0 ? (
+                <div className="text-xs text-smartTextSecondary py-4 text-center">No recent bookings.</div>
+              ) : (
+                <div className="space-y-3">
+                  {recentBookings.map((booking) => (
                   <div
                     key={booking.id}
                     className="p-3.5 rounded-smart bg-smartSurface/50 border border-smartBorder/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
@@ -750,7 +961,8 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 ))}
-              </div>
+                </div>
+              )}
             </Card>
 
             {/* -------------------------------------------------- */}
@@ -982,6 +1194,116 @@ export default function ProfilePage() {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Add Vehicle Modal */}
+      <Modal
+        isOpen={isAddVehicleOpen}
+        onClose={() => setIsAddVehicleOpen(false)}
+        title="Register New Vehicle"
+      >
+        <form onSubmit={handleAddVehicleSubmit} className="space-y-4 text-xs font-sans text-smartTextSecondary">
+          <Input
+            label="Make (e.g. Honda)"
+            value={vehForm.make}
+            onChange={(e) => setVehForm({ ...vehForm, make: e.target.value })}
+            placeholder="Honda"
+            required
+          />
+          <Input
+            label="Model (e.g. City)"
+            value={vehForm.model}
+            onChange={(e) => setVehForm({ ...vehForm, model: e.target.value })}
+            placeholder="City"
+            required
+          />
+          <Input
+            label="License Plate / Registration"
+            value={vehForm.licensePlate}
+            onChange={(e) => setVehForm({ ...vehForm, licensePlate: e.target.value })}
+            placeholder="MH-01-AB-1234"
+            required
+          />
+          <Input
+            label="Color (Optional)"
+            value={vehForm.color}
+            onChange={(e) => setVehForm({ ...vehForm, color: e.target.value })}
+            placeholder="White"
+          />
+          <div className="flex items-center gap-2 pt-2">
+            <input
+              type="checkbox"
+              id="isEV"
+              checked={vehForm.isEV}
+              onChange={(e) => setVehForm({ ...vehForm, isEV: e.target.checked })}
+              className="rounded bg-smartSurface border border-smartBorder text-signature focus:ring-signature h-4 w-4"
+            />
+            <label htmlFor="isEV" className="select-none text-xs text-smartTextPrimary font-medium">
+              This is an Electric Vehicle (EV)
+            </label>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" size="sm" type="button" onClick={() => setIsAddVehicleOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" type="submit">
+              Register Vehicle
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Vehicle Modal */}
+      <Modal
+        isOpen={isEditVehicleOpen}
+        onClose={() => setIsEditVehicleOpen(false)}
+        title="Edit Registered Vehicle"
+      >
+        <form onSubmit={handleEditVehicleSubmit} className="space-y-4 text-xs font-sans text-smartTextSecondary">
+          <Input
+            label="Make"
+            value={vehForm.make}
+            onChange={(e) => setVehForm({ ...vehForm, make: e.target.value })}
+            required
+          />
+          <Input
+            label="Model"
+            value={vehForm.model}
+            onChange={(e) => setVehForm({ ...vehForm, model: e.target.value })}
+            required
+          />
+          <Input
+            label="License Plate / Registration"
+            value={vehForm.licensePlate}
+            onChange={(e) => setVehForm({ ...vehForm, licensePlate: e.target.value })}
+            required
+          />
+          <Input
+            label="Color (Optional)"
+            value={vehForm.color}
+            onChange={(e) => setVehForm({ ...vehForm, color: e.target.value })}
+          />
+          <div className="flex items-center gap-2 pt-2">
+            <input
+              type="checkbox"
+              id="editIsEV"
+              checked={vehForm.isEV}
+              onChange={(e) => setVehForm({ ...vehForm, isEV: e.target.checked })}
+              className="rounded bg-smartSurface border border-smartBorder text-signature focus:ring-signature h-4 w-4"
+            />
+            <label htmlFor="editIsEV" className="select-none text-xs text-smartTextPrimary font-medium">
+              This is an Electric Vehicle (EV)
+            </label>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" size="sm" type="button" onClick={() => setIsEditVehicleOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" type="submit">
+              Save Changes
+            </Button>
+          </div>
+        </form>
       </Modal>
 
       {/* Toast Notification */}
