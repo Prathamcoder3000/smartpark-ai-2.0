@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { prisma } from '../utils/db';
 import { BookingStatus, ReservationStatus, ParkingSlotStatus, NotificationType, NotificationPriority } from '@prisma/client';
+import { emitBookingUpdate, emitAvailabilityUpdate } from '../utils/events';
 
 export async function bookingRoutes(fastify: FastifyInstance, options: FastifyPluginOptions) {
   fastify.addHook('preHandler', fastify.authenticate);
@@ -111,6 +112,9 @@ export async function bookingRoutes(fastify: FastifyInstance, options: FastifyPl
         return booking;
       });
 
+      emitBookingUpdate(result.facilityId, result.id, result.status, result.slotId, result.reservationId || undefined);
+      emitAvailabilityUpdate(result.facilityId);
+
       return reply.status(201).send({
         success: true,
         data: result
@@ -189,6 +193,9 @@ export async function bookingRoutes(fastify: FastifyInstance, options: FastifyPl
 
         return updated;
       });
+
+      emitBookingUpdate(result.facilityId, result.id, result.status, result.slotId, result.reservationId || undefined);
+      emitAvailabilityUpdate(result.facilityId);
 
       return reply.send({
         success: true,
@@ -291,6 +298,9 @@ export async function bookingRoutes(fastify: FastifyInstance, options: FastifyPl
         return updated;
       });
 
+      emitBookingUpdate(result.facilityId, result.id, result.status, result.slotId, result.reservationId || undefined);
+      emitAvailabilityUpdate(result.facilityId);
+
       return reply.send({
         success: true,
         data: result
@@ -377,6 +387,9 @@ export async function bookingRoutes(fastify: FastifyInstance, options: FastifyPl
 
         return updated;
       });
+
+      emitBookingUpdate(result.facilityId, result.id, result.status, result.slotId, result.reservationId || undefined);
+      emitAvailabilityUpdate(result.facilityId);
 
       return reply.send({
         success: true,

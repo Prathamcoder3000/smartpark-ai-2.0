@@ -32,11 +32,17 @@ export async function realtimeRoutes(fastify: FastifyInstance, options: FastifyP
 
     // Listen to changes
     realtimeEmitter.on('availability_update', onUpdate);
+    realtimeEmitter.on('telemetry_update', onUpdate);
+    realtimeEmitter.on('booking_update', onUpdate);
+    realtimeEmitter.on('reservation_update', onUpdate);
 
     // Cleanup when request closes
     request.raw.on('close', () => {
       clearInterval(heartbeatTimer);
       realtimeEmitter.off('availability_update', onUpdate);
+      realtimeEmitter.off('telemetry_update', onUpdate);
+      realtimeEmitter.off('booking_update', onUpdate);
+      realtimeEmitter.off('reservation_update', onUpdate);
     });
   });
 }

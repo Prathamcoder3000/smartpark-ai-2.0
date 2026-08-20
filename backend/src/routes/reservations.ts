@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { prisma } from '../utils/db';
 import { ReservationStatus, NotificationType, NotificationPriority } from '@prisma/client';
+import { emitReservationUpdate, emitAvailabilityUpdate } from '../utils/events';
 
 export async function reservationRoutes(fastify: FastifyInstance, options: FastifyPluginOptions) {
   fastify.addHook('preHandler', fastify.authenticate);
@@ -156,6 +157,9 @@ export async function reservationRoutes(fastify: FastifyInstance, options: Fasti
 
         return reservation;
       });
+
+      emitReservationUpdate(result.facilityId, result.id, result.status, result.slotId);
+      emitAvailabilityUpdate(result.facilityId);
 
       return reply.status(201).send({
         success: true,
@@ -417,6 +421,9 @@ export async function reservationRoutes(fastify: FastifyInstance, options: Fasti
         return updated;
       });
 
+      emitReservationUpdate(result.facilityId, result.id, result.status, result.slotId);
+      emitAvailabilityUpdate(result.facilityId);
+
       return reply.send({
         success: true,
         data: result
@@ -487,6 +494,9 @@ export async function reservationRoutes(fastify: FastifyInstance, options: Fasti
 
         return updated;
       });
+
+      emitReservationUpdate(reservation.facilityId, result.id, result.status, reservation.slotId);
+      emitAvailabilityUpdate(reservation.facilityId);
 
       return reply.send({
         success: true,
