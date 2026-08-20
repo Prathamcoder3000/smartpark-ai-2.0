@@ -25,7 +25,7 @@ export async function realtimeRoutes(fastify: FastifyInstance, options: FastifyP
     }, 30000);
 
     const onUpdate = (eventData: any) => {
-      if (eventData.facilityId === id && !reply.raw.destroyed) {
+      if ((id === 'all' || eventData.facilityId === id) && !reply.raw.destroyed) {
         reply.raw.write(`data: ${JSON.stringify(eventData)}\n\n`);
       }
     };
