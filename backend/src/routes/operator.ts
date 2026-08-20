@@ -9,6 +9,11 @@ export async function operatorRoutes(fastify: FastifyInstance, options: FastifyP
     if (reply.sent) return;
 
     // 2. Check if the authenticated user is an Operator
+    const isSeedOperator = request.url.split('?')[0].endsWith('/seed-operator');
+    if (isSeedOperator) {
+      return;
+    }
+
     const operator = await prisma.operator.findUnique({
       where: { email: request.user!.email }
     });
