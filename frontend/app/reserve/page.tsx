@@ -233,7 +233,7 @@ export default function ReservePage() {
         licensePlate: newVehReg.toUpperCase(),
         make,
         model,
-        type: newVehType
+        isEV: newVehType === 'EV'
       });
 
       if (res.success) {
