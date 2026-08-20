@@ -64,6 +64,7 @@ export default function ProfilePage() {
   const [savedFacilities, setSavedFacilities] = React.useState<SavedParkingFacility[]>(INITIAL_SAVED_PARKING);
   const [recentBookings, setRecentBookings] = React.useState<any[]>([]);
   const [notifications, setNotifications] = React.useState<NotificationPreferences>(INITIAL_NOTIFICATIONS);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = React.useState<number>(0);
 
   // Vehicles states
   const [vehicles, setVehicles] = React.useState<any[]>([]);
@@ -116,6 +117,12 @@ export default function ProfilePage() {
           };
         });
         setRecentBookings(mapped);
+      }
+
+      // Load notifications count
+      const nRes = await api.get('/api/notifications?unread=true');
+      if (nRes.success && Array.isArray(nRes.data)) {
+        setUnreadNotificationsCount(nRes.data.length);
       }
     } catch (err) {
       console.error('Failed to load profile data:', err);
@@ -529,7 +536,14 @@ export default function ProfilePage() {
                 </Link>
                 <Link href="/notifications">
                   <div className="w-full flex items-center justify-between p-2.5 rounded-smart bg-smartSurface/60 border border-smartBorder/60 hover:border-smartBorder hover:bg-smartElevated transition-all text-xs text-smartTextPrimary font-medium cursor-pointer">
-                    <span>Notifications Center</span>
+                    <div className="flex items-center gap-2">
+                      <span>Notifications Center</span>
+                      {unreadNotificationsCount > 0 && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-bold bg-occupied text-white rounded-full leading-none">
+                          {unreadNotificationsCount}
+                        </span>
+                      )}
+                    </div>
                     <span className="text-[10px] text-signature">&rarr;</span>
                   </div>
                 </Link>
