@@ -30,6 +30,22 @@ for (const env of requiredEnv) {
 
 const server = Fastify({ logger: true });
 
+server.setErrorHandler((error, request, reply) => {
+  const err = error as any;
+  const statusCode = err.statusCode || 500;
+  const isClientError = statusCode >= 400 && statusCode < 500;
+  
+  server.log.error(err);
+  
+  reply.status(statusCode).send({
+    success: false,
+    error: {
+      code: isClientError ? err.code || 'BAD_REQUEST' : 'INTERNAL_SERVER_ERROR',
+      message: isClientError ? err.message : 'An unexpected error occurred.'
+    }
+  });
+});
+
 const start = async () => {
   // CORS setup
   const frontendUrl = process.env.FRONTEND_URL;
@@ -56,7 +72,27 @@ const start = async () => {
 
   // Health endpoint
   server.get('/health', async () => {
-    return { status: 'ok' };
+    return { status: 'ok', service: 'smartpark-backend' };
+  });
+
+  // Readiness endpoint checking DB connectivity
+  server.get('/ready', async (request, reply) => {
+    try {
+      const { prisma } = await import('./utils/db');
+      await prisma.$queryRaw`SELECT 1`;
+      return {
+        status: 'ok',
+        service: 'smartpark-backend',
+        db: 'connected'
+      };
+    } catch (err: any) {
+      server.log.error(`Readiness check failed: ${err.message}`);
+      return reply.status(503).send({
+        status: 'error',
+        service: 'smartpark-backend',
+        db: 'disconnected'
+      });
+    }
   });
 
   // Route registration
