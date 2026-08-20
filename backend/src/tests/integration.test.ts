@@ -36,6 +36,31 @@ async function runTests() {
   await app.register(aiRoutes, { prefix: '/api/ai' });
   await app.register(realtimeRoutes, { prefix: '/api/realtime' });
 
+  // Health endpoint
+  app.get('/health', async () => {
+    return { status: 'ok', service: 'smartpark-backend' };
+  });
+
+  // Readiness endpoint checking DB connectivity
+  app.get('/ready', async (request, reply) => {
+    try {
+      const { prisma } = await import('../utils/db');
+      await prisma.$queryRaw`SELECT 1`;
+      return {
+        status: 'ok',
+        service: 'smartpark-backend',
+        db: 'connected'
+      };
+    } catch (err: any) {
+      app.log.error(`Readiness check failed: ${err.message}`);
+      return reply.status(503).send({
+        status: 'error',
+        service: 'smartpark-backend',
+        db: 'disconnected'
+      });
+    }
+  });
+
   // State variables to clean up
   const testEmail = `integration-test-${Date.now()}@example.com`;
   const testPassword = 'SecurePassword123!';
@@ -89,6 +114,30 @@ async function runTests() {
       throw new Error(`Auth /me failed: ${meRes.body}`);
     }
     console.log(' -> AUTH /ME SUCCESS.');
+
+    // 3A. HEALTH CHECK TEST
+    console.log('[Test 3A] Testing /health endpoint...');
+    const healthRes = await app.inject({
+      method: 'GET',
+      url: '/health'
+    });
+    const healthData = JSON.parse(healthRes.body);
+    if (healthRes.statusCode !== 200 || healthData.status !== 'ok') {
+      throw new Error(`Health check failed: ${healthRes.body}`);
+    }
+    console.log(' -> HEALTH CHECK SUCCESS.');
+
+    // 3B. READINESS CHECK TEST
+    console.log('[Test 3B] Testing /ready endpoint...');
+    const readyRes = await app.inject({
+      method: 'GET',
+      url: '/ready'
+    });
+    const readyData = JSON.parse(readyRes.body);
+    if (readyRes.statusCode !== 200 || readyData.status !== 'ok' || readyData.db !== 'connected') {
+      throw new Error(`Readiness check failed: ${readyRes.body}`);
+    }
+    console.log(' -> READINESS CHECK SUCCESS.');
 
     // 4. GET FACILITIES TEST & SLOT RESOLUTION
     console.log('[Test 4] Query active facilities & slots...');
