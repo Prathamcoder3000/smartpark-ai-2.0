@@ -42,6 +42,7 @@ import {
   FacilityFloor,
   FacilitySlot
 } from '../../../lib/facilityData';
+import { BASE_URL } from '../../../lib/api';
 
 const mapIdToBackend = (idOrSlug: string): string => {
   const normalized = idOrSlug.toLowerCase();
@@ -80,7 +81,7 @@ export default function FacilityDetailsPage() {
     async function load() {
       try {
         setLoading(true);
-        const res = await fetch(`http://localhost:8001/api/facilities`);
+        const res = await fetch(`${BASE_URL}/api/facilities`);
         const json = await res.json();
         if (json.success && Array.isArray(json.data)) {
           const matchedApi = json.data.find((f: any) => f.id === mapIdToBackend(facilityId) || mapIdToFrontend(f.id) === facilityId);
@@ -135,7 +136,7 @@ export default function FacilityDetailsPage() {
     let eventSource: EventSource | null = null;
     try {
       const backendId = mapIdToBackend(facilityId);
-      eventSource = new EventSource(`http://localhost:8001/api/realtime/facilities/${backendId}`);
+      eventSource = new EventSource(`${BASE_URL}/api/realtime/facilities/${backendId}`);
       eventSource.onmessage = () => {
         load();
       };

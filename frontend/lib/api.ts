@@ -1,4 +1,4 @@
-const BASE_URL = 'http://localhost:8001';
+export const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
 class ApiClient {
   private static AUTH_KEY = 'smartpark_auth_session';

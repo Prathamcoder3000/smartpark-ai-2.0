@@ -35,6 +35,7 @@ import {
   IntelligenceFacility,
   RegionalSummary
 } from '../../lib/intelligenceData';
+import { BASE_URL } from '../../lib/api';
 
 const mapIdToBackend = (idOrSlug: string): string => {
   const normalized = idOrSlug.toLowerCase();
@@ -94,7 +95,7 @@ export default function IntelligencePage() {
           evCompatible = true;
         }
 
-        const response = await fetch('http://localhost:8001/api/ai/recommend', {
+        const response = await fetch(`${BASE_URL}/api/ai/recommend`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

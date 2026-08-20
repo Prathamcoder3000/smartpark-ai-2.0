@@ -1,4 +1,4 @@
-import { api } from './api';
+import { api, BASE_URL } from './api';
 
 export interface User {
   id: string;
@@ -57,7 +57,7 @@ class AuthService {
       // Let's check operator dashboard asynchronously or check if they are seeded.
       let role: 'operator' | 'driver' | 'admin' = 'driver';
       try {
-        const opCheck = await fetch('http://localhost:8001/api/operator/dashboard', {
+        const opCheck = await fetch(`${BASE_URL}/api/operator/dashboard`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (opCheck.ok) {

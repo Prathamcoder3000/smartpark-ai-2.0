@@ -49,6 +49,7 @@ import {
   MapParkingSlot,
   SlotState,
 } from '../../lib/liveMapData';
+import { BASE_URL } from '../../lib/api';
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -679,7 +680,7 @@ export default function LiveMapPage() {
   React.useEffect(() => {
     async function load() {
       try {
-        const response = await fetch('http://localhost:8001/api/facilities');
+        const response = await fetch(`${BASE_URL}/api/facilities`);
         const json = await response.json();
         if (json.success && Array.isArray(json.data)) {
           const mapped = json.data.map((f: any) => {
@@ -723,7 +724,7 @@ export default function LiveMapPage() {
     // In horizontal scale this event emitter would hook up to redis pub/sub
     let eventSource: EventSource | null = null;
     try {
-      eventSource = new EventSource('http://localhost:8001/api/realtime/facilities/all');
+      eventSource = new EventSource(`${BASE_URL}/api/realtime/facilities/all`);
       eventSource.onmessage = () => {
         load(); // Reload fresh database snapshot upon SSE triggers
       };

@@ -42,6 +42,7 @@ import {
   SearchSort,
   SearchSuggestion,
 } from '../../lib/searchData';
+import { BASE_URL } from '../../lib/api';
 
 const mapIdToBackend = (idOrSlug: string): string => {
   const normalized = idOrSlug.toLowerCase();
@@ -141,7 +142,7 @@ export default function SearchPage() {
   React.useEffect(() => {
     async function load() {
       try {
-        const response = await fetch('http://localhost:8001/api/facilities');
+        const response = await fetch(`${BASE_URL}/api/facilities`);
         const json = await response.json();
         if (json.success && Array.isArray(json.data)) {
           const mapped = json.data.map((f: any) => {
