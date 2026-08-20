@@ -7,7 +7,7 @@
 [![PostgreSQL](https://img.shields.io/badge/Database-Supabase%20PostgreSQL-3ecf8e?style=flat-square&logo=supabase)](https://supabase.com/)
 [![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178c6?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
 [![Python](https://img.shields.io/badge/Language-Python%203-3776ab?style=flat-square&logo=python)](https://www.python.org/)
-[![Project Status](https://img.shields.io/badge/Status-Release%20Ready-success?style=flat-square)](https://github.com/Prathamcoder3000/smartpark-ai-2.0)
+[![Project Status](https://img.shields.io/badge/Status-Release%20Ready-success?style=flat-square)](#-roadmap--engineering-phases)
 
 SmartPark AI 2.0 is an intelligent, production-grade parking discovery, reservation, and real-time mobility platform. It helps drivers locate optimal parking bays by combining spatial 2D floor visualizers, explainable AI recommendation algorithms, IoT ultrasonic sensor telemetry, and live multi-client server-sent events.
 
@@ -20,16 +20,18 @@ SmartPark AI 2.0 is an intelligent, production-grade parking discovery, reservat
 - [Technology Stack](#-technology-stack)
 - [Repository Structure](#-repository-structure)
 - [Database Schema](#-database-schema)
-- [Core Workflows](#-core-workflows)
+- [System Data Flow](#-system-data-flow)
+- [User Workflow](#-user-workflow)
+- [Slot State Machine](#-slot-state-machine)
 - [Advanced Features](#-advanced-features)
   - [Rule-Based Explainable AI](#1-rule-based-explainable-ai)
   - [IoT Telemetry Pipeline](#2-iot-telemetry-pipeline)
-  - [Real-Time SSE updates](#3-real-time-sse-updates)
+  - [Real-Time SSE Updates](#3-real-time-updates-sse)
   - [Production Security & Abuse Protection](#4-production-security--abuse-protection)
 - [Installation & Local Setup](#-installation--local-setup)
 - [API Documentation](#-api-documentation)
 - [Automated Integration Tests](#-automated-integration-tests)
-- [Roadmap & engineering phases](#-roadmap--engineering-phases)
+- [Roadmap & Engineering Phases](#-roadmap--engineering-phases)
 - [License](#-license)
 
 ---
