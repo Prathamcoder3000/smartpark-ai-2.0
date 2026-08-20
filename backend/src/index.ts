@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import dotenv from 'dotenv';
 import { authPlugin } from './plugins/auth';
 import { authRoutes } from './routes/auth';
@@ -35,6 +36,19 @@ const start = async () => {
   await server.register(cors, {
     origin: frontendUrl && frontendUrl !== '*' ? frontendUrl : true,
     credentials: true,
+  });
+
+  // Rate Limiting
+  await server.register(rateLimit, {
+    max: 1000,
+    timeWindow: '1 minute',
+    errorResponseBuilder: (request, context) => ({
+      success: false,
+      error: {
+        code: 'TOO_MANY_REQUESTS',
+        message: `Rate limit exceeded. Try again in ${context.after}.`
+      }
+    })
   });
 
   // Auth helper decorator plugin

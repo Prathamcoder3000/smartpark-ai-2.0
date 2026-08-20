@@ -82,7 +82,14 @@ export async function aiRoutes(fastify: FastifyInstance, options: FastifyPluginO
   });
 
   // POST /api/ai/recommend
-  fastify.post('/recommend', async (request, reply) => {
+  fastify.post('/recommend', {
+    config: {
+      rateLimit: {
+        max: Number(process.env.RATE_LIMIT_RECOMMEND_MAX ?? 20),
+        timeWindow: '1 minute'
+      }
+    }
+  }, async (request, reply) => {
     try {
       const body = request.body as any;
       const { preferences } = body || {};

@@ -5,7 +5,14 @@ import { generateToken } from '../plugins/auth';
 
 export async function authRoutes(fastify: FastifyInstance, options: FastifyPluginOptions) {
   // POST /api/auth/signup
-  fastify.post('/signup', async (request, reply) => {
+  fastify.post('/signup', {
+    config: {
+      rateLimit: {
+        max: Number(process.env.RATE_LIMIT_SIGNUP_MAX ?? 10),
+        timeWindow: '1 minute'
+      }
+    }
+  }, async (request, reply) => {
     try {
       const body = request.body as any;
       if (!body) {
@@ -85,7 +92,14 @@ export async function authRoutes(fastify: FastifyInstance, options: FastifyPlugi
   });
 
   // POST /api/auth/login
-  fastify.post('/login', async (request, reply) => {
+  fastify.post('/login', {
+    config: {
+      rateLimit: {
+        max: Number(process.env.RATE_LIMIT_LOGIN_MAX ?? 15),
+        timeWindow: '1 minute'
+      }
+    }
+  }, async (request, reply) => {
     try {
       const body = request.body as any;
       if (!body) {

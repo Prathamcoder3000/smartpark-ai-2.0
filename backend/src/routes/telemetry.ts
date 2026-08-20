@@ -41,7 +41,14 @@ export async function telemetryRoutes(fastify: FastifyInstance, options: Fastify
   };
 
   // POST /api/telemetry
-  fastify.post('/', async (request, reply) => {
+  fastify.post('/', {
+    config: {
+      rateLimit: {
+        max: Number(process.env.RATE_LIMIT_TELEMETRY_MAX ?? 100),
+        timeWindow: '1 minute'
+      }
+    }
+  }, async (request, reply) => {
     try {
       const body = request.body as any;
       if (!body) {
@@ -111,7 +118,14 @@ export async function telemetryRoutes(fastify: FastifyInstance, options: Fastify
   });
 
   // POST /api/telemetry/batch
-  fastify.post('/batch', async (request, reply) => {
+  fastify.post('/batch', {
+    config: {
+      rateLimit: {
+        max: Number(process.env.RATE_LIMIT_TELEMETRY_BATCH_MAX ?? 50),
+        timeWindow: '1 minute'
+      }
+    }
+  }, async (request, reply) => {
     try {
       const body = request.body as any;
       if (!body || !Array.isArray(body)) {
