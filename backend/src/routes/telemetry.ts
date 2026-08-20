@@ -77,10 +77,14 @@ export async function telemetryRoutes(fastify: FastifyInstance, options: Fastify
           if (slot && slot.status !== ParkingSlotStatus.DISABLED) {
             const targetStatus = occupancy ? ParkingSlotStatus.OCCUPIED : ParkingSlotStatus.AVAILABLE;
             if (slot.status !== targetStatus) {
-              await tx.parkingSlot.update({
-                where: { id: slotId },
-                data: { status: targetStatus }
-              });
+              if (slot.status === ParkingSlotStatus.RESERVED && targetStatus === ParkingSlotStatus.AVAILABLE) {
+                // Do not clear reserved state from telemetry sensor report
+              } else {
+                await tx.parkingSlot.update({
+                  where: { id: slotId },
+                  data: { status: targetStatus }
+                });
+              }
             }
           }
         }
@@ -149,10 +153,14 @@ export async function telemetryRoutes(fastify: FastifyInstance, options: Fastify
             if (slot && slot.status !== ParkingSlotStatus.DISABLED) {
               const targetStatus = occupancy ? ParkingSlotStatus.OCCUPIED : ParkingSlotStatus.AVAILABLE;
               if (slot.status !== targetStatus) {
-                await tx.parkingSlot.update({
-                  where: { id: slotId },
-                  data: { status: targetStatus }
-                });
+                if (slot.status === ParkingSlotStatus.RESERVED && targetStatus === ParkingSlotStatus.AVAILABLE) {
+                  // Do not clear reserved state from telemetry sensor report
+                } else {
+                  await tx.parkingSlot.update({
+                    where: { id: slotId },
+                    data: { status: targetStatus }
+                  });
+                }
               }
             }
             affectedSlots.add(slotId);
