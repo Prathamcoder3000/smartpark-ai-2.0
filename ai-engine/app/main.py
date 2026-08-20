@@ -68,6 +68,8 @@ def predict(payload: PredictRequest):
         recommendation = "EXCELLENT_TIME"
 
     return {
+        "success": True,
+        "engine": "Rule-Based Parking Intelligence",
         "prediction": {
             "occupancy": predicted_occ,
             "confidence": confidence
@@ -144,5 +146,6 @@ def recommend(payload: RecommendRequest):
 
     return {
         "success": True,
+        "engine": "Rule-Based Parking Intelligence",
         "recommendations": scored_recommendations
     }
