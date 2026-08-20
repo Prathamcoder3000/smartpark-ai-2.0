@@ -15,12 +15,26 @@ import { realtimeRoutes } from './routes/realtime';
 
 dotenv.config();
 
+// Environment validation
+const requiredEnv = ['DATABASE_URL', 'JWT_SECRET'];
+if (process.env.NODE_ENV === 'production') {
+  requiredEnv.push('FRONTEND_URL', 'AI_ENGINE_URL');
+}
+for (const env of requiredEnv) {
+  if (!process.env[env]) {
+    console.error(`Error: Missing required environment variable: ${env}`);
+    process.exit(1);
+  }
+}
+
 const server = Fastify({ logger: true });
 
 const start = async () => {
   // CORS setup
+  const frontendUrl = process.env.FRONTEND_URL;
   await server.register(cors, {
-    origin: true,
+    origin: frontendUrl && frontendUrl !== '*' ? frontendUrl : true,
+    credentials: true,
   });
 
   // Auth helper decorator plugin

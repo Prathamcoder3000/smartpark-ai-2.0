@@ -33,6 +33,20 @@ export async function operatorRoutes(fastify: FastifyInstance, options: FastifyP
     if (!body || !body.email || !body.name) {
       return reply.status(400).send({ success: false, error: { code: 'BAD_REQUEST', message: 'Email and name are required.' } });
     }
+
+    // Security check: if operators already exist, restrict seeding to match ADMIN_SEED_SECRET
+    const operatorCount = await prisma.operator.count();
+    if (operatorCount > 0) {
+      const adminSecret = process.env.ADMIN_SEED_SECRET;
+      const providedSecret = request.headers['x-admin-seed-secret'] || (body && body.adminSeedSecret);
+      if (!adminSecret || providedSecret !== adminSecret) {
+        return reply.status(403).send({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Operator seeding is disabled or requires valid secret.' }
+        });
+      }
+    }
+
     const op = await prisma.operator.upsert({
       where: { email: body.email },
       update: { name: body.name },
