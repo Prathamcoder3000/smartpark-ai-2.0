@@ -26,13 +26,13 @@ import {
 import { Header } from '../../components/ui/Header';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { IconButton } from '../../components/ui/IconButton';
 import { Badge } from '../../components/ui/Badge';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import { MetricCard } from '../../components/ui/MetricCard';
 import { Modal } from '../../components/ui/Modal';
 import { Toast } from '../../components/ui/Toast';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { LoadingSkeleton } from '../../components/ui/LoadingSkeleton';
 import { Booking, BookingStatus } from '../../lib/bookingsData';
 import { useRouter } from 'next/navigation';
 import { authService } from '../../lib/auth';
@@ -47,6 +47,7 @@ export default function BookingsPage() {
   const [activeFilter, setActiveFilter] = React.useState<string>('ALL');
   const [selectedBookingDetails, setSelectedBookingDetails] = React.useState<Booking | null>(null);
   const [bookingToCancel, setBookingToCancel] = React.useState<Booking | null>(null);
+  const [bookingToCheckOut, setBookingToCheckOut] = React.useState<Booking | null>(null);
   const [focusedPassBooking, setFocusedPassBooking] = React.useState<Booking | null>(null);
 
   // Toast notifications
@@ -101,9 +102,9 @@ export default function BookingsPage() {
     };
   };
 
-  const loadBookings = React.useCallback(async () => {
+  const loadBookings = React.useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
-      setLoading(true);
       const res = await api.get('/api/bookings');
       if (res.success && Array.isArray(res.data)) {
         setBookings(res.data.map(mapBookingToFrontend));
@@ -129,7 +130,6 @@ export default function BookingsPage() {
   // Find the primary booking for the Pass (Upcoming or Active)
   const primaryPassBooking = React.useMemo(() => {
     if (focusedPassBooking) {
-      // Find updated booking in the list
       return bookings.find(b => b.id === focusedPassBooking.id) || focusedPassBooking;
     }
     const active = bookings.find(b => b.bookingStatus === 'ACTIVE');
@@ -164,20 +164,22 @@ export default function BookingsPage() {
       const res = await api.post(`/api/bookings/${bookingId}/check-in`);
       if (res.success) {
         showToast('Successfully checked in! Physical gate opened.', 'success');
-        await loadBookings();
+        await loadBookings(true);
       }
     } catch (err: any) {
       showToast(err.message || 'Check-in failed.', 'error');
     }
   };
 
-  // Check Out Handler
-  const handleCheckOut = async (bookingId: string) => {
+  // Confirm Check Out (initiates check-out)
+  const handleCheckOut = async () => {
+    if (!bookingToCheckOut) return;
     try {
-      const res = await api.post(`/api/bookings/${bookingId}/check-out`);
+      const res = await api.post(`/api/bookings/${bookingToCheckOut.id}/check-out`);
       if (res.success) {
         showToast(`Successfully checked out! Charged: ₹${res.data.finalAmount}.`, 'success');
-        await loadBookings();
+        setBookingToCheckOut(null);
+        await loadBookings(true);
       }
     } catch (err: any) {
       showToast(err.message || 'Check-out failed.', 'error');
@@ -192,7 +194,7 @@ export default function BookingsPage() {
       if (res.success) {
         showToast(`Booking ${bookingToCancel.bookingReference} cancelled successfully.`, 'success');
         setBookingToCancel(null);
-        await loadBookings();
+        await loadBookings(true);
       }
     } catch (err: any) {
       showToast(err.message || 'Cancellation failed.', 'error');
@@ -218,9 +220,9 @@ export default function BookingsPage() {
     <div className="min-h-screen bg-smartBg text-smartTextPrimary pb-16 relative">
       <Header />
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 flex flex-col gap-6">
-
-        {/* 1. PAGE HEADER */}
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 flex flex-col gap-6 text-left">
+        
+        {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-smartBorder/40 pb-5">
           <div>
             <h1 className="text-2xl sm:text-3xl font-display font-bold uppercase tracking-tight text-white">
@@ -241,7 +243,7 @@ export default function BookingsPage() {
           </div>
         </div>
 
-        {/* 2. BOOKINGS SUMMARY METRICS */}
+        {/* Metrics Summary */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <MetricCard 
             label="Upcoming Reservations"
@@ -265,22 +267,20 @@ export default function BookingsPage() {
           />
         </div>
 
-        {/* 3. TWO-COLUMN: DIGITAL PASS vs INSIGHTS */}
+        {/* Active Permit Card & AI Intelligence */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-          {/* Left / Center 2 Columns: Digital Parking Pass Card */}
           <div className="lg:col-span-2 flex flex-col gap-4">
             <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-smartTextSecondary">
               Active Access Permit
             </h3>
 
-            {primaryPassBooking ? (
+            {loading ? (
+              <div className="h-56 bg-smartSurface border border-smartBorder rounded-smart animate-pulse" />
+            ) : primaryPassBooking ? (
               <div id="digital-pass-card" className="relative overflow-hidden bg-gradient-to-br from-smartSurface to-smartElevated border border-signature/20 rounded-smart-lg p-6 flex flex-col md:flex-row justify-between gap-6 shadow-xl">
-                
                 <div className="absolute top-0 right-0 h-32 w-32 bg-signature/5 blur-2xl rounded-full pointer-events-none" />
                 <div className="absolute bottom-0 left-0 h-24 w-24 bg-aiBlue/5 blur-2xl rounded-full pointer-events-none" />
 
-                {/* Left Side: Pass details */}
                 <div className="flex-1 flex flex-col justify-between gap-4 relative z-10">
                   <div>
                     <div className="flex items-center gap-2 mb-2">
@@ -323,7 +323,6 @@ export default function BookingsPage() {
                   </div>
 
                   <div className="flex flex-wrap gap-2 pt-1.5">
-                    {/* Live Check-in / Check-out dynamic triggers */}
                     {primaryPassBooking.bookingStatus === 'UPCOMING' && (
                       <Button 
                         variant="primary" 
@@ -339,7 +338,7 @@ export default function BookingsPage() {
                         variant="primary" 
                         size="sm" 
                         className="text-[10.5px] uppercase tracking-wider font-semibold bg-occupied hover:bg-occupied/85 text-white border-transparent"
-                        onClick={() => handleCheckOut(primaryPassBooking.id)}
+                        onClick={() => setBookingToCheckOut(primaryPassBooking)}
                       >
                         Check Out
                       </Button>
@@ -367,7 +366,6 @@ export default function BookingsPage() {
                   </div>
                 </div>
 
-                {/* Right Side: QR Pattern Code */}
                 <div className="w-full md:w-44 flex flex-col items-center justify-center bg-smartBg/70 border border-smartBorder/60 p-4 rounded-xl relative z-10">
                   <div className="h-28 w-28 border-2 border-dashed border-smartBorder/95 flex items-center justify-center bg-smartSurface relative rounded p-2">
                     <QrCode className="h-20 w-20 text-smartTextPrimary opacity-80" />
@@ -380,7 +378,6 @@ export default function BookingsPage() {
                     Live Real-time Permit
                   </span>
                 </div>
-
               </div>
             ) : (
               <Card variant="outlined" className="h-56 flex flex-col items-center justify-center border-dashed border-smartBorder/60">
@@ -395,7 +392,6 @@ export default function BookingsPage() {
             )}
           </div>
 
-          {/* Right Column: AI Intel */}
           <div className="flex flex-col gap-4">
             <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-smartTextSecondary">
               AI Parking Intelligence
@@ -424,9 +420,9 @@ export default function BookingsPage() {
                 </div>
               </div>
 
-              <div className="bg-smartBg/60 border border-smartBorder/45 p-3 rounded-lg flex flex-col gap-2">
+              <div className="bg-smartBg/60 border border-smartBorder/45 p-3 rounded-lg flex flex-col gap-2 font-sans text-[9.5px]">
                 <h5 className="text-[9px] font-mono text-white uppercase tracking-wider">AI Recommender Tip</h5>
-                <p className="text-[9.5px] text-smartTextSecondary leading-relaxed">
+                <p className="text-smartTextSecondary leading-relaxed">
                   Metro Central Garage currently has the highest available bays close to central station gate. Access barrier opens automatically via registered license plates.
                 </p>
               </div>
@@ -434,7 +430,7 @@ export default function BookingsPage() {
           </div>
         </div>
 
-        {/* 4. HISTORY / LOG LIST */}
+        {/* History Archives */}
         <div className="flex flex-col gap-4 mt-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-smartBorder/40 pb-3 gap-2">
             <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-smartTextSecondary">
@@ -458,17 +454,18 @@ export default function BookingsPage() {
           </div>
 
           {loading ? (
-            <div className="text-center py-10 font-mono text-xs text-smartTextSecondary animate-pulse">
-              Loading reservation logs...
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <LoadingSkeleton variant="rect" height="120px" className="w-full" />
+              <LoadingSkeleton variant="rect" height="120px" className="w-full" />
             </div>
           ) : filteredBookings.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {filteredBookings.map((b) => (
-                <Card key={b.id} className="flex flex-col justify-between gap-4 p-5 hover:border-smartBorder/90 transition-all">
+                <Card key={b.id} className="flex flex-col justify-between gap-4 p-5 hover:border-smartBorder/90 transition-all text-left">
                   <div className="flex justify-between items-start gap-4">
                     <div>
                       <h4 className="text-[12.5px] font-sans font-bold text-white line-clamp-1">{b.facilityName}</h4>
-                      <p className="text-[10px] text-smartTextSecondary flex items-center gap-1 mt-0.5">
+                      <p className="text-[10px] text-smartTextSecondary flex items-center gap-1 mt-0.5 font-sans">
                         <MapPin className="h-3 w-3 shrink-0" />
                         {b.facilityAddress}
                       </p>
@@ -508,10 +505,10 @@ export default function BookingsPage() {
                     </div>
 
                     <div className="flex gap-1.5">
-                      <Button variant="secondary" size="sm" onClick={() => handleFocusPass(b)}>
-                        Digital Pass
+                      <Button variant="secondary" size="sm" onClick={() => handleFocusPass(b)} className="text-[9px] uppercase font-mono tracking-wider">
+                        Pass
                       </Button>
-                      <Button variant="ghost" size="sm" className="text-white hover:text-signature" onClick={() => setSelectedBookingDetails(b)}>
+                      <Button variant="ghost" size="sm" className="text-white hover:text-signature text-[9px] uppercase font-mono tracking-wider" onClick={() => setSelectedBookingDetails(b)}>
                         Inspect
                       </Button>
                     </div>
@@ -530,7 +527,7 @@ export default function BookingsPage() {
         </div>
       </main>
 
-      {/* 6. BOOKING DETAILS INSPECTOR MODAL */}
+      {/* Details inspector */}
       <Modal
         isOpen={selectedBookingDetails !== null}
         onClose={() => setSelectedBookingDetails(null)}
@@ -538,29 +535,29 @@ export default function BookingsPage() {
         size="md"
       >
         {selectedBookingDetails && (
-          <div className="flex flex-col gap-4 font-sans text-xs">
+          <div className="flex flex-col gap-4 font-sans text-xs text-left">
             <div className="grid grid-cols-2 gap-4 border-b border-smartBorder/30 pb-3">
               <div>
-                <span className="text-[8.5px] text-smartTextSecondary block uppercase">Facility Name</span>
+                <span className="text-[8.5px] text-smartTextSecondary block uppercase font-mono">Facility Name</span>
                 <span className="text-white text-xs font-semibold">{selectedBookingDetails.facilityName}</span>
               </div>
               <div>
-                <span className="text-[8.5px] text-smartTextSecondary block uppercase">Pass Reference</span>
+                <span className="text-[8.5px] text-smartTextSecondary block uppercase font-mono">Pass Reference</span>
                 <span className="text-white text-xs font-semibold font-mono">{selectedBookingDetails.bookingReference}</span>
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3 border-b border-smartBorder/30 pb-3">
               <div>
-                <span className="text-[8.5px] text-smartTextSecondary block uppercase">Date</span>
+                <span className="text-[8.5px] text-smartTextSecondary block uppercase font-mono">Date</span>
                 <span className="text-white text-[11px] font-semibold">{selectedBookingDetails.date}</span>
               </div>
               <div>
-                <span className="text-[8.5px] text-smartTextSecondary block uppercase">Time Range</span>
+                <span className="text-[8.5px] text-smartTextSecondary block uppercase font-mono">Time Range</span>
                 <span className="text-white text-[11px] font-semibold">{selectedBookingDetails.startTime} - {selectedBookingDetails.endTime}</span>
               </div>
               <div>
-                <span className="text-[8.5px] text-smartTextSecondary block uppercase">Status</span>
+                <span className="text-[8.5px] text-smartTextSecondary block uppercase font-mono">Status</span>
                 <Badge variant={selectedBookingDetails.bookingStatus === 'ACTIVE' ? 'occupied' : 'available'} className="uppercase text-[8px] font-semibold">
                   {selectedBookingDetails.bookingStatus}
                 </Badge>
@@ -569,11 +566,11 @@ export default function BookingsPage() {
 
             <div className="grid grid-cols-2 gap-4 border-b border-smartBorder/30 pb-3">
               <div>
-                <span className="text-[8.5px] text-smartTextSecondary block uppercase">Bay & Floor</span>
+                <span className="text-[8.5px] text-smartTextSecondary block uppercase font-mono">Bay & Floor</span>
                 <span className="text-signature text-xs font-semibold">{selectedBookingDetails.slotNumber} ({selectedBookingDetails.floor})</span>
               </div>
               <div>
-                <span className="text-[8.5px] text-smartTextSecondary block uppercase">Assigned Vehicle</span>
+                <span className="text-[8.5px] text-smartTextSecondary block uppercase font-mono">Assigned Vehicle</span>
                 <span className="text-white text-[11px] truncate block" title={selectedBookingDetails.vehicle}>
                   {selectedBookingDetails.vehicle}
                 </span>
@@ -615,7 +612,7 @@ export default function BookingsPage() {
               <Button 
                 variant="secondary" 
                 size="sm" 
-                className="text-xs uppercase tracking-wider font-semibold"
+                className="text-xs uppercase tracking-wider font-semibold font-mono"
                 onClick={() => setSelectedBookingDetails(null)}
               >
                 Close
@@ -624,19 +621,74 @@ export default function BookingsPage() {
                 <Button 
                   variant="primary" 
                   size="sm" 
-                  className="text-xs uppercase tracking-wider font-semibold"
+                  className="text-xs uppercase tracking-wider font-semibold font-mono"
                   onClick={() => setSelectedBookingDetails(null)}
                 >
-                  Launch Route
+                  Map Route
                 </Button>
               </Link>
             </div>
-
           </div>
         )}
       </Modal>
 
-      {/* 7. CANCEL RESERVATION CONFIRMATION MODAL */}
+      {/* Checkout confirmation dialog */}
+      <Modal
+        isOpen={bookingToCheckOut !== null}
+        onClose={() => setBookingToCheckOut(null)}
+        title="Confirm Check Out Checkout?"
+        size="sm"
+      >
+        {bookingToCheckOut && (
+          <div className="flex flex-col gap-4 font-sans text-xs text-left">
+            <div className="flex items-start gap-2.5 bg-signature/10 border border-signature/30 p-3 rounded-lg text-white">
+              <Info className="h-5 w-5 text-signature shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-bold text-[11px] uppercase font-mono">Invoice Calculation notice</h4>
+                <p className="text-[10px] mt-0.5 text-smartTextSecondary leading-relaxed font-sans">
+                  The system will calculate the total fee based on active check-in time (₹5.00/hr, minimum ₹5.00).
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-smartBg border border-smartBorder/60 p-3.5 rounded-lg flex flex-col gap-2 font-mono">
+              <div className="flex justify-between border-b border-smartBorder/30 pb-1.5">
+                <span className="text-smartTextSecondary">Garage:</span>
+                <span className="text-white text-right max-w-[180px] truncate">{bookingToCheckOut.facilityName}</span>
+              </div>
+              <div className="flex justify-between border-b border-smartBorder/30 pb-1.5">
+                <span className="text-smartTextSecondary">Slot Number:</span>
+                <span className="text-signature">{bookingToCheckOut.slotNumber}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-smartTextSecondary">Reference:</span>
+                <span className="text-white">{bookingToCheckOut.bookingReference}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-2 justify-end mt-2 pt-2 border-t border-smartBorder/45">
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                className="text-xs uppercase tracking-wider font-semibold font-mono h-9"
+                onClick={() => setBookingToCheckOut(null)}
+              >
+                Go Back
+              </Button>
+              <Button 
+                variant="primary" 
+                size="sm" 
+                className="text-xs uppercase tracking-wider font-semibold font-mono h-9 bg-occupied text-white hover:bg-occupied/80"
+                onClick={handleCheckOut}
+              >
+                Confirm Checkout
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Cancellation confirmation */}
       <Modal
         isOpen={bookingToCancel !== null}
         onClose={() => setBookingToCancel(null)}
@@ -644,12 +696,12 @@ export default function BookingsPage() {
         size="sm"
       >
         {bookingToCancel && (
-          <div className="flex flex-col gap-4 font-sans text-xs">
+          <div className="flex flex-col gap-4 font-sans text-xs text-left">
             <div className="flex items-start gap-2.5 bg-occupied/5 border border-occupied/30 p-3 rounded-lg text-occupied">
               <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
               <div>
-                <h4 className="font-bold text-[11.5px] uppercase">Warning: Cancellation Policy</h4>
-                <p className="text-[10px] mt-0.5 text-occupied/90 leading-relaxed">
+                <h4 className="font-bold text-[11.5px] uppercase font-mono">Warning: Cancellation Policy</h4>
+                <p className="text-[10px] mt-0.5 text-occupied/90 leading-relaxed font-sans">
                   You are about to cancel your reservation for spot <span className="font-bold">{bookingToCancel.slotNumber}</span>. This action is irreversible.
                 </p>
               </div>
@@ -669,7 +721,7 @@ export default function BookingsPage() {
                 <span className="text-white">{bookingToCancel.date} @ {bookingToCancel.startTime}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-smartTextSecondary">Refund Amount:</span>
+                <span className="text-smartTextSecondary">Permit Amount:</span>
                 <span className="text-available font-bold">₹{bookingToCancel.amount}</span>
               </div>
             </div>
@@ -678,21 +730,20 @@ export default function BookingsPage() {
               <Button 
                 variant="secondary" 
                 size="sm" 
-                className="text-xs uppercase tracking-wider font-semibold"
+                className="text-xs uppercase tracking-wider font-semibold font-mono h-9"
                 onClick={() => setBookingToCancel(null)}
               >
-                Keep Reservation
+                Go Back
               </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="text-xs uppercase tracking-wider font-semibold text-white bg-occupied hover:bg-occupied/80"
+                className="text-xs uppercase tracking-wider font-semibold font-mono h-9 text-white bg-occupied hover:bg-occupied/80"
                 onClick={handleCancelBooking}
               >
                 Cancel Booking
               </Button>
             </div>
-
           </div>
         )}
       </Modal>
