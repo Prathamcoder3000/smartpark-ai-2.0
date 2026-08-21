@@ -34,6 +34,13 @@ export default function LoginPage() {
     type: 'success',
   });
 
+  // Redirect if already authenticated
+  React.useEffect(() => {
+    if (authService.isAuthenticated()) {
+      router.push('/home');
+    }
+  }, [router]);
+
   const triggerToast = (message: string, type: 'success' | 'info' | 'warning' | 'error' = 'info') => {
     setToast({ isOpen: true, message, type });
   };
@@ -75,14 +82,18 @@ export default function LoginPage() {
 
       if (res.success) {
         setIsSuccess(true);
+        triggerToast('Welcome back to SmartPark AI!', 'success');
         setTimeout(() => {
           router.push('/home');
         }, 1200);
       } else {
         setApiError(res.error || 'Authentication failed. Please try again.');
+        triggerToast(res.error || 'Invalid credentials. Please verify your details.', 'error');
       }
-    } catch {
-      setApiError('An unexpected network error occurred. Please try again.');
+    } catch (err: any) {
+      const msg = err?.message || 'An unexpected network error occurred. Please try again.';
+      setApiError(msg);
+      triggerToast(msg, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -94,20 +105,22 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-smartBg text-smartTextPrimary flex flex-col justify-between selection:bg-signature selection:text-smartBg relative overflow-x-hidden">
-      {/* Simplified Public Authentication Header */}
+      {/* Background Graphic Grid */}
+      <div className="absolute inset-0 bg-[radial-gradient(#181D21_1px,transparent_1px)] [background-size:24px_24px] opacity-40 pointer-events-none z-0" />
+      <div className="absolute top-0 left-1/4 w-[600px] h-[300px] bg-signature/5 blur-[120px] rounded-full pointer-events-none z-0" />
+
+      {/* Header */}
       <div className="w-full fixed top-4 left-0 right-0 z-50 px-4 sm:px-6 lg:px-8 pointer-events-none select-none">
-        <header className="mx-auto max-w-5xl w-full bg-smartBg/75 backdrop-blur-xl border border-smartBorder rounded-full pointer-events-auto shadow-2xl h-12 flex items-center justify-between px-4 sm:px-6">
-          {/* Logo */}
+        <header className="mx-auto max-w-5xl w-full bg-smartBg/85 backdrop-blur-md border border-smartBorder rounded-full pointer-events-auto shadow-2xl h-12 flex items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-1.5 group focus:outline-none">
             <div className="h-5 w-5 rounded-full bg-signature/10 border border-signature/30 flex items-center justify-center">
               <div className="h-1.5 w-1.5 rounded-full bg-signature" />
             </div>
-            <span className="font-display text-xs font-semibold uppercase tracking-wider text-smartTextPrimary group-hover:text-white transition-colors">
+            <span className="font-display text-xs font-bold uppercase tracking-wider text-smartTextPrimary group-hover:text-white transition-colors">
               SmartPark<span className="text-signature">.</span>AI
             </span>
           </Link>
           
-          {/* Opposite Auth Trigger & Back Link */}
           <div className="flex items-center gap-4">
             <Link href="/" className="text-[10px] uppercase font-mono font-bold tracking-wider text-smartTextSecondary hover:text-smartTextPrimary transition-colors">
               Back to Home
@@ -123,20 +136,16 @@ export default function LoginPage() {
 
       <div className="h-20" />
 
-      {/* Main Authentication Console */}
+      {/* Main Console */}
       <main className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8 relative">
-        {/* Subtle grid pattern background accent */}
-        <div className="absolute inset-0 bg-[radial-gradient(#282F34_1px,transparent_1px)] [background-size:24px_24px] opacity-25 pointer-events-none" />
-
         <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 relative z-10 my-auto items-center">
           
-          {/* Left Column: Form Panel */}
+          {/* Form Panel */}
           <div className="lg:col-span-6 w-full max-w-md mx-auto">
-            {/* Header branding / badge */}
             <div className="text-center lg:text-left mb-6">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-smartSurface border border-smartBorder mb-3 shadow-inner">
                 <span className="h-2 w-2 rounded-full bg-signature animate-pulse" />
-                <span className="text-[10px] font-mono uppercase tracking-widest text-smartTextSecondary">
+                <span className="text-[9px] font-mono uppercase tracking-widest text-smartTextSecondary">
                   Identity & Access Console
                 </span>
               </div>
@@ -148,8 +157,7 @@ export default function LoginPage() {
               </p>
             </div>
 
-            <Card className="p-6 sm:p-8 border-smartBorder bg-smartSurface/90 backdrop-blur-md shadow-2xl relative overflow-hidden">
-              {/* Top status indicator line */}
+            <Card className="p-6 sm:p-8 border-smartBorder bg-smartSurface/90 backdrop-blur-md shadow-2xl relative overflow-hidden text-left">
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-smartBorder via-signature/50 to-smartBorder" />
 
               <AnimatePresence mode="wait">
@@ -170,13 +178,12 @@ export default function LoginPage() {
                     <p className="text-xs text-smartTextSecondary max-w-xs font-sans">
                       Session token issued. Redirecting to your intelligent dashboard...
                     </p>
-                    <div className="mt-2 flex items-center gap-2">
-                      <Badge variant="occupied">OPERATOR VERIFIED</Badge>
+                    <div className="mt-2">
+                      <Badge variant="signature">DRIVER PROFILE LOADED</Badge>
                     </div>
                   </motion.div>
                 ) : (
                   <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
-                    {/* Global API Error Notice */}
                     {apiError && (
                       <motion.div
                         initial={{ opacity: 0, y: -6 }}
@@ -192,12 +199,11 @@ export default function LoginPage() {
                       </motion.div>
                     )}
 
-                    {/* Email Input */}
                     <div>
                       <Input
                         label="Email Address"
                         type="email"
-                        placeholder="operator@smartpark.ai"
+                        placeholder="driver@smartpark.ai"
                         value={email}
                         onChange={(e) => {
                           setEmail(e.target.value);
@@ -207,11 +213,10 @@ export default function LoginPage() {
                         required
                         autoComplete="email"
                         disabled={isLoading}
-                        className="bg-smartBg border-smartBorder focus:border-signature/80 focus:ring-1 focus:ring-signature/40 text-smartTextPrimary"
+                        className="bg-smartBg border-smartBorder focus:border-signature/85 focus:ring-1 focus:ring-signature/40 text-smartTextPrimary"
                       />
                     </div>
 
-                    {/* Password Input with Show/Hide toggle */}
                     <div className="flex flex-col gap-1.5 w-full">
                       <div className="flex items-center justify-between">
                         <label
@@ -255,7 +260,6 @@ export default function LoginPage() {
                       )}
                     </div>
 
-                    {/* Remember Me Checkbox */}
                     <div className="flex items-center justify-between pt-1">
                       <label className="flex items-center gap-2.5 cursor-pointer group select-none">
                         <input
@@ -271,13 +275,12 @@ export default function LoginPage() {
                       </label>
                     </div>
 
-                    {/* Submit Button */}
                     <Button
                       type="submit"
                       variant="primary"
                       size="lg"
                       isLoading={isLoading}
-                      className="w-full mt-2 font-semibold shadow-lg"
+                      className="w-full mt-2 font-semibold shadow-lg text-xs uppercase font-mono tracking-wider"
                     >
                       {!isLoading && (
                         <>
@@ -286,7 +289,6 @@ export default function LoginPage() {
                       )}
                     </Button>
 
-                    {/* Divider */}
                     <div className="relative my-2 flex items-center justify-center">
                       <div className="absolute inset-0 flex items-center">
                         <div className="w-full border-t border-smartBorder/60"></div>
@@ -296,44 +298,37 @@ export default function LoginPage() {
                       </span>
                     </div>
 
-                    {/* Social Authentication buttons */}
                     <div className="grid grid-cols-3 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleSocialLogin('Google')}
-                        className="h-9 rounded bg-[#181D21] border border-smartBorder hover:border-signature/40 hover:text-white transition-colors duration-150 flex items-center justify-center gap-1.5 text-xs text-smartTextSecondary font-sans font-semibold"
-                      >
-                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.114-5.136 4.114-3.535 0-6.4-2.865-6.4-6.4s2.865-6.4 6.4-6.4c1.782 0 3.32.732 4.474 1.92l3.178-3.178C19.49 2.215 16.037 1 12.24 1 5.756 1 .5 6.256.5 12.75s5.256 11.75 11.74 11.75c7.34 0 11.66-5.16 11.66-11.75 0-.79-.07-1.397-.22-1.965H12.24z"/>
-                        </svg>
-                        Google
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleSocialLogin('Apple')}
-                        className="h-9 rounded bg-[#181D21] border border-smartBorder hover:border-signature/40 hover:text-white transition-colors duration-150 flex items-center justify-center gap-1.5 text-xs text-smartTextSecondary font-sans font-semibold"
-                      >
-                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 4.17c.66-.81 1.11-1.93.99-3.06-1 .04-2.21.67-2.93 1.49-.62.69-1.16 1.84-1.01 2.96 1.12.09 2.27-.58 2.95-1.39z"/>
-                        </svg>
-                        Apple
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleSocialLogin('Microsoft')}
-                        className="h-9 rounded bg-[#181D21] border border-smartBorder hover:border-signature/40 hover:text-white transition-colors duration-150 flex items-center justify-center gap-1.5 text-xs text-smartTextSecondary font-sans font-semibold"
-                      >
-                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M0 0h11v11H0zM12 0h11v11H12zM0 12h11v11H0zM12 12h11v11H12z"/>
-                        </svg>
-                        Microsoft
-                      </button>
+                      {['Google', 'Apple', 'Microsoft'].map((prov) => (
+                        <button
+                          key={prov}
+                          type="button"
+                          onClick={() => handleSocialLogin(prov)}
+                          className="h-9 rounded bg-[#181D21] border border-smartBorder hover:border-signature/40 hover:text-white transition-colors duration-150 flex items-center justify-center gap-1.5 text-xs text-smartTextSecondary font-sans font-semibold"
+                        >
+                          {prov === 'Google' && (
+                            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.114-5.136 4.114-3.535 0-6.4-2.865-6.4-6.4s2.865-6.4 6.4-6.4c1.782 0 3.32.732 4.474 1.92l3.178-3.178C19.49 2.215 16.037 1 12.24 1 5.756 1 .5 6.256.5 12.75s5.256 11.75 11.74 11.75c7.34 0 11.66-5.16 11.66-11.75 0-.79-.07-1.397-.22-1.965H12.24z"/>
+                            </svg>
+                          )}
+                          {prov === 'Apple' && (
+                            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 4.17c.66-.81 1.11-1.93.99-3.06-1 .04-2.21.67-2.93 1.49-.62.69-1.16 1.84-1.01 2.96 1.12.09 2.27-.58 2.95-1.39z"/>
+                            </svg>
+                          )}
+                          {prov === 'Microsoft' && (
+                            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M0 0h11v11H0zM12 0h11v11H12zM0 12h11v11H0zM12 12h11v11H12z"/>
+                            </svg>
+                          )}
+                          {prov}
+                        </button>
+                      ))}
                     </div>
                   </form>
                 )}
               </AnimatePresence>
 
-              {/* Separator / Footer Link */}
               <div className="mt-6 pt-4 border-t border-smartBorder/50 text-center">
                 <p className="text-xs font-sans text-smartTextSecondary">
                   Don&apos;t have an account?{' '}
@@ -347,7 +342,6 @@ export default function LoginPage() {
               </div>
             </Card>
 
-            {/* Security Footnote */}
             <div className="mt-6 flex items-center justify-center lg:justify-start gap-4 text-[10px] font-mono text-smartTextSecondary/60">
               <span className="flex items-center gap-1">
                 <ShieldCheck className="h-3.5 w-3.5 text-signature/70" /> 256-BIT ENCRYPTION
@@ -359,9 +353,9 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Right Column: Premium Desktop Visual Panel */}
+          {/* Desktop Visual Panel */}
           <div className="hidden lg:block lg:col-span-6 space-y-6 pl-8">
-            <Card variant="elevated" className="border-signature/20 bg-smartSurface/80 backdrop-blur-md p-8 relative overflow-hidden">
+            <Card variant="elevated" className="border-signature/20 bg-smartSurface/80 backdrop-blur-md p-8 relative overflow-hidden text-left">
               <div className="absolute top-0 right-0 p-6 opacity-[0.012] pointer-events-none">
                 <Cpu className="h-48 w-48 text-signature" />
               </div>
@@ -405,12 +399,10 @@ export default function LoginPage() {
         </div>
       </main>
 
-      {/* Footer minimal info */}
       <footer className="py-4 text-center text-[10px] font-mono text-smartTextSecondary/50 border-t border-smartBorder/20">
         SMARTPARK AI 2.0 · INTELLIGENT PARKING MANAGEMENT PLATFORM
       </footer>
 
-      {/* Toast Notification for Social Logins */}
       <Toast
         isOpen={toast.isOpen}
         message={toast.message}
