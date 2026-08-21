@@ -30,6 +30,7 @@ import { Select } from '../../components/ui/Select';
 import { Toast } from '../../components/ui/Toast';
 import { Modal } from '../../components/ui/Modal';
 import { ParkingSlot } from '../../components/ui/ParkingSlot';
+import { LoadingSkeleton } from '../../components/ui/LoadingSkeleton';
 import {
   MOCK_FACILITY_DETAILS,
   FacilityDetails,
@@ -81,8 +82,6 @@ export default function ReservePage() {
   const initialSlotId = searchParams?.get('slot') || '';
   const initialFloorId = searchParams?.get('floor') || '';
 
-  const [isInvalidParam, setIsInvalidParam] = React.useState(false);
-
   const [vehicles, setVehicles] = React.useState<VehicleOption[]>([]);
   const [addVehicleModalOpen, setAddVehicleModalOpen] = React.useState(false);
   const [newVehLabel, setNewVehLabel] = React.useState('');
@@ -123,7 +122,7 @@ export default function ReservePage() {
           id: v.id,
           label: `${v.make} ${v.model}`,
           registration: v.licensePlate,
-          type: v.type,
+          type: v.isEV ? 'EV' : 'GAS',
           isDefault: v.isDefault || false
         }));
         setVehicles(mappedVeh);
@@ -168,7 +167,7 @@ export default function ReservePage() {
         let defaultFac = mappedFac[0];
         if (initialFacilitySlug) {
           const match = mappedFac.find(
-            (f) => f.slug === initialFacilitySlug || f.id === initialFacilitySlug
+            (f) => f.slug === initialFacilitySlug || f.id === initialFacilitySlug || mapIdToBackend(f.id) === mapIdToBackend(initialFacilitySlug)
           );
           if (match) defaultFac = match;
         }
@@ -178,7 +177,7 @@ export default function ReservePage() {
       }
     } catch (err: any) {
       console.error(err);
-      triggerToast(err.message || 'Failed to load setup data.', 'error');
+      triggerToast(err.message || 'Failed to sync checkout metadata.', 'error');
     } finally {
       setLoading(false);
     }
@@ -214,8 +213,15 @@ export default function ReservePage() {
     if (!facility) {
       return { baseAmount: 0, serviceFee: 0, convenienceFee: 0, discount: 0, totalAmount: 0 };
     }
-    return calculatePricing(facility.hourlyRate, duration, prefEvCharging);
-  }, [facility, duration, prefEvCharging]);
+    const base = facility.hourlyRate * duration;
+    return {
+      baseAmount: base,
+      serviceFee: 10,
+      convenienceFee: 5,
+      discount: 0,
+      totalAmount: base + 15
+    };
+  }, [facility, duration]);
 
   const handleAddVehicle = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -300,9 +306,6 @@ export default function ReservePage() {
     if (!facility || !activeFloor) return;
 
     try {
-      const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId) || vehicles[0];
-
-      // Format ISO string start/end
       const startHour = parseInt(startTime.split(':')[0]) || 9;
       const startD = new Date(reservationDate);
       startD.setHours(startHour, 0, 0, 0);
@@ -349,14 +352,14 @@ export default function ReservePage() {
             hourlyRate: facility.hourlyRate,
             availableBays: facility.availableBays,
             totalBays: facility.totalBays,
-            occupancyPct: facility.occupancyPct,
+            occupancyPct: facility.occupancyPct || 0,
             rating: facility.rating,
             dailyRate: facility.dailyRate,
             isCovered: facility.isCovered
           },
           floorLabel,
           pricing,
-          reference: res.data.booking?.id || res.data.reservation?.id || 'SP-DEMO',
+          reference: res.data.id || 'SP-DEMO',
           createdAt: new Date().toISOString()
         };
 
@@ -364,14 +367,24 @@ export default function ReservePage() {
         router.push('/reserve/confirmation');
       }
     } catch (err: any) {
-      triggerToast(err.message || 'Reservation booking transaction failed.', 'error');
+      triggerToast(err.message || 'Reservation failed. Slot may have been booked.', 'error');
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-smartBg flex items-center justify-center font-mono text-xs text-smartTextSecondary animate-pulse">
-        Loading smart booking dashboard...
+      <div className="min-h-screen bg-smartBg text-smartTextPrimary flex flex-col font-sans pb-20 select-none">
+        <Header />
+        <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 space-y-6">
+          <div className="h-12 bg-smartSurface animate-pulse border border-smartBorder rounded-smart w-64" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+              <div className="h-40 bg-smartSurface animate-pulse border border-smartBorder rounded-smart" />
+              <div className="h-44 bg-smartSurface animate-pulse border border-smartBorder rounded-smart" />
+            </div>
+            <div className="h-72 bg-smartSurface animate-pulse border border-smartBorder rounded-smart" />
+          </div>
+        </main>
       </div>
     );
   }
@@ -380,7 +393,7 @@ export default function ReservePage() {
     <div className="min-h-screen bg-smartBg text-smartTextPrimary pb-20 selection:bg-signature/20 selection:text-signature">
       <Header />
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 text-left">
         
         {/* Step Indicator Header */}
         <div className="flex justify-between items-center border-b border-smartBorder/40 pb-5 mb-6">
@@ -390,7 +403,7 @@ export default function ReservePage() {
               {step === 1 ? 'Configure Parking Spot' : 'Review Permit Checkout'}
             </h1>
             <p className="text-[10.5px] text-smartTextSecondary mt-0.5 font-sans">
-              {step === 1 ? 'Dynamic slot routing, time bounds selection, and physical telemetry assignments.' : 'Verify transaction price limits, slot bookings, and plate authorization.'}
+              {step === 1 ? 'Configure timing limits, slots selection, and authorize plate profiles.' : 'Verify convenience fees, pricing summaries, and check out.'}
             </p>
           </div>
 
@@ -403,14 +416,13 @@ export default function ReservePage() {
         {step === 1 ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
-            {/* Left 2 Columns: Config Form */}
+            {/* Left Config Panel */}
             <div className="lg:col-span-2 flex flex-col gap-6">
 
-              {/* 1. SELECT FACILITY & DATE/TIME */}
               <Card className="flex flex-col gap-4">
                 <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-smartTextSecondary border-b border-smartBorder/30 pb-2 flex items-center justify-between">
                   <span>1. Facility & Duration Params</span>
-                  <Badge variant="signature">Realtime DB</Badge>
+                  <Badge variant="signature">Live Grid Sync</Badge>
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -469,7 +481,7 @@ export default function ReservePage() {
                 </div>
               </Card>
 
-              {/* 2. PREFERENCES (OPTIONAL FILTER) */}
+              {/* Preferences Filter */}
               <Card className="flex flex-col gap-4">
                 <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-smartTextSecondary border-b border-smartBorder/30 pb-2">
                   2. User Preferences (AI Recommender Inputs)
@@ -480,15 +492,15 @@ export default function ReservePage() {
                     <input type="checkbox" checked={prefEvCharging} onChange={(e) => { setPrefEvCharging(e.target.checked); setSelectedSlotId(''); }} className="accent-signature" />
                     <div>
                       <span className="text-[11px] font-bold block">EV Fast Charger</span>
-                      <span className="text-[9px] opacity-80 block">Requires plug slot</span>
+                      <span className="text-[9px] opacity-80 block font-mono">Requires plug slot</span>
                     </div>
                   </label>
 
                   <label className={`flex items-center gap-2.5 border p-3 rounded-lg cursor-pointer select-none transition-all ${prefCoveredParking ? 'border-signature/50 bg-signature/5 text-white' : 'border-smartBorder bg-smartSurface text-smartTextSecondary'}`}>
                     <input type="checkbox" checked={prefCoveredParking} onChange={(e) => setPrefCoveredParking(e.target.checked)} className="accent-signature" />
                     <div>
-                      <span className="text-[11px] font-bold block">Covered Parking</span>
-                      <span className="text-[9px] opacity-80 block">Weather protection</span>
+                      <span className="text-[11px] font-bold block">Covered Deck</span>
+                      <span className="text-[9px] opacity-80 block font-mono">Weather protection</span>
                     </div>
                   </label>
 
@@ -496,17 +508,17 @@ export default function ReservePage() {
                     <input type="checkbox" checked={prefShorterWalk} onChange={(e) => setPrefShorterWalk(e.target.checked)} className="accent-signature" />
                     <div>
                       <span className="text-[11px] font-bold block">Near Elevator</span>
-                      <span className="text-[9px] opacity-80 block">Shorter ETA walk</span>
+                      <span className="text-[9px] opacity-80 block font-mono">Shorter walk time</span>
                     </div>
                   </label>
                 </div>
               </Card>
 
-              {/* 3. PHYSICAL DECK & SLOT MATRIX */}
+              {/* Slot Select Matrix */}
               <Card className="flex flex-col gap-4">
                 <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-smartTextSecondary border-b border-smartBorder/30 pb-2 flex justify-between items-center">
-                  <span>3. Deck Level slot Selection</span>
-                  <Badge variant="signature">Real-time occupancy</Badge>
+                  <span>3. Deck Level Slot Selection</span>
+                  <Badge variant="signature">Live occupancy</Badge>
                 </h3>
 
                 {facility ? (
@@ -580,10 +592,9 @@ export default function ReservePage() {
                         <div className="flex flex-wrap gap-4 text-[9px] font-mono text-smartTextSecondary/80 pt-1 border-t border-smartBorder/30">
                           <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded bg-smartSurface border border-smartBorder" /> Available</span>
                           <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded bg-signature/20 border border-signature" /> Selected</span>
-                          <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded bg-occupied/10 border border-occupied/30" /> Occupied (IoT)</span>
+                          <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded bg-occupied/10 border border-occupied/30" /> Occupied</span>
                           <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded bg-aiBlue/10 border border-aiBlue/30" /> Reserved</span>
                           <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded bg-smartBg border border-smartBorder/20 opacity-30" /> Disabled</span>
-                          <span className="flex items-center gap-1.5"><Zap className="h-3 w-3 text-available" /> EV Charging Ready</span>
                         </div>
                       </div>
                     ) : null}
@@ -591,7 +602,7 @@ export default function ReservePage() {
                 ) : null}
               </Card>
 
-              {/* 4. VEHICLE REGISTER */}
+              {/* Vehicle Profiler */}
               <Card className="flex flex-col gap-4">
                 <div className="flex justify-between items-center border-b border-smartBorder/30 pb-2">
                   <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-smartTextSecondary">
@@ -601,7 +612,7 @@ export default function ReservePage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => setAddVehicleModalOpen(true)}
-                    className="text-signature hover:text-signature/80 hover:bg-signature/5"
+                    className="text-signature hover:text-signature/80 hover:bg-signature/5 font-mono text-[10px]"
                   >
                     <Plus className="h-3 w-3 mr-1" />
                     ADD VEHICLE
@@ -646,24 +657,23 @@ export default function ReservePage() {
 
             </div>
 
-            {/* Right Column: AI Intel Recommendations */}
+            {/* Right Column: Checkout Summary & AI Spotlight */}
             <div className="flex flex-col gap-6">
               
-              {/* Recommended Tip */}
               {aiRecommendation ? (
                 <Card className="bg-gradient-to-br from-smartSurface to-signature/5 border-signature/20">
                   <div className="flex items-start gap-3">
-                    <div className="p-2 rounded bg-signature/10 text-signature shrink-0">
+                    <div className="p-2 rounded bg-signature/10 text-signature shrink-0 animate-pulse">
                       <Sparkles className="h-4.5 w-4.5" />
                     </div>
                     <div>
-                      <h4 className="text-xs font-bold text-white uppercase">AI Routing Recommender</h4>
+                      <h4 className="text-xs font-bold text-white uppercase">AI Space Recommender</h4>
                       <p className="text-[10.5px] text-smartTextSecondary mt-1 leading-relaxed">
                         Based on your filter metrics, we recommend booking slot <span className="text-white font-bold font-mono">{aiRecommendation.shortId}</span> on floor <span className="text-white font-mono">{activeFloorTab}</span>.
                       </p>
                       
                       <div className="flex items-center gap-3 mt-3">
-                        <span className="text-[10px] font-mono text-signature font-bold">{aiRecommendation.score}% Match Score</span>
+                        <span className="text-[10px] font-mono text-signature font-bold">{aiRecommendation.score}% Match</span>
                         <Button
                           variant="primary"
                           size="sm"
@@ -678,7 +688,6 @@ export default function ReservePage() {
                 </Card>
               ) : null}
 
-              {/* Checkout Summary panel */}
               <Card className="sticky top-6 flex flex-col gap-4 justify-between min-h-[300px]">
                 <div className="flex flex-col gap-4">
                   <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-smartTextSecondary border-b border-smartBorder/30 pb-2">
@@ -742,12 +751,11 @@ export default function ReservePage() {
                   <ChevronLeft className="h-4.5 w-4.5" />
                 </button>
                 <div>
-                  <h3 className="text-[13px] font-sans font-bold text-white uppercase">Confirm Parking spot booking</h3>
-                  <span className="text-[9.5px] text-smartTextSecondary font-mono uppercase">Reference checkout</span>
+                  <h3 className="text-[13px] font-sans font-bold text-white uppercase">Confirm parking reservation</h3>
+                  <span className="text-[9.5px] text-smartTextSecondary font-mono uppercase">Reference permit review</span>
                 </div>
               </div>
 
-              {/* Booking metadata */}
               <div className="bg-smartBg/60 border border-smartBorder/45 p-4 rounded-xl flex flex-col gap-3 font-mono text-[11px]">
                 <div className="flex justify-between border-b border-smartBorder/30 pb-2">
                   <span className="text-smartTextSecondary">Selected Garage:</span>
@@ -770,34 +778,33 @@ export default function ReservePage() {
                   <span className="text-white font-bold font-mono">{vehicles.find((v) => v.id === selectedVehicleId)?.registration}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-smartTextSecondary">Charge Limit:</span>
-                  <span className="text-available font-bold font-mono">₹{pricing.totalAmount} (₹{facility?.hourlyRate}/hr)</span>
+                  <span className="text-smartTextSecondary">Permit Amount:</span>
+                  <span className="text-signature font-bold font-mono">₹{pricing.totalAmount} (₹{facility?.hourlyRate}/hr)</span>
                 </div>
               </div>
 
               <div className="flex gap-3 items-start bg-signature/5 border border-signature/20 p-3 rounded-lg">
                 <Shield className="h-5 w-5 text-signature shrink-0 mt-0.5" />
                 <p className="text-[10px] text-smartTextSecondary leading-relaxed">
-                  Clicking "CONFIRM RESERVATION" will write this reservation and booking transaction into Supabase, update physical slot occupancy states, and issue your digital permit.
+                  Clicking "CONFIRM RESERVATION" will write this reservation and booking transaction into the system databases, update physical slot occupancy states, and issue your digital permit.
                 </p>
               </div>
 
-              {/* CTAs */}
               <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-smartBorder">
                 <Button
                   variant="secondary"
                   onClick={() => setStep(1)}
-                  className="w-full sm:w-1/3 text-xs h-10 justify-center"
+                  className="w-full sm:w-1/3 text-xs h-10 justify-center uppercase font-mono tracking-wider"
                 >
-                  Back to Select
+                  Back
                 </Button>
                 
                 <Button
                   variant="primary"
                   onClick={handleConfirmReservation}
-                  className="w-full sm:w-2/3 text-xs h-10 justify-center gap-1.5"
+                  className="w-full sm:w-2/3 text-xs h-10 justify-center gap-1.5 uppercase font-mono tracking-wider"
                 >
-                  CONFIRM RESERVATION
+                  Confirm Reservation
                   <CheckCircle className="h-4 w-4" />
                 </Button>
               </div>
@@ -814,7 +821,7 @@ export default function ReservePage() {
         title="Add Vehicle Registry Profile"
         size="md"
       >
-        <form onSubmit={handleAddVehicle} className="space-y-4 text-xs font-sans text-smartTextSecondary">
+        <form onSubmit={handleAddVehicle} className="space-y-4 text-xs font-sans text-smartTextSecondary text-left">
           
           <Input
             label="Vehicle Label (e.g. My Honda City)"
