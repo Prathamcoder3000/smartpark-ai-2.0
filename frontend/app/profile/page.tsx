@@ -23,6 +23,7 @@ import {
   Sliders,
   CheckCircle,
   CarFront,
+  AlertTriangle,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { Header } from '../../components/ui/Header';
@@ -36,6 +37,7 @@ import { Select } from '../../components/ui/Select';
 import { Modal } from '../../components/ui/Modal';
 import { Toast, ToastType } from '../../components/ui/Toast';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { LoadingSkeleton } from '../../components/ui/LoadingSkeleton';
 import { useRouter } from 'next/navigation';
 import { authService } from '../../lib/auth';
 
@@ -74,7 +76,9 @@ export default function ProfilePage() {
   // New vehicle modal states
   const [isAddVehicleOpen, setIsAddVehicleOpen] = React.useState(false);
   const [isEditVehicleOpen, setIsEditVehicleOpen] = React.useState(false);
+  const [isDeleteVehicleOpen, setIsDeleteVehicleOpen] = React.useState(false);
   const [selectedVehicle, setSelectedVehicle] = React.useState<any | null>(null);
+  const [vehicleToDelete, setVehicleToDelete] = React.useState<any | null>(null);
 
   // Vehicle form state
   const [vehForm, setVehForm] = React.useState({
@@ -188,12 +192,14 @@ export default function ProfilePage() {
     }
   };
 
-  const handleDeleteVehicle = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this vehicle?')) return;
+  const handleDeleteVehicle = async () => {
+    if (!vehicleToDelete) return;
     try {
-      const res = await api.delete(`/api/vehicles/${id}`);
+      const res = await api.delete(`/api/vehicles/${vehicleToDelete.id}`);
       if (res.success) {
         showToast('Vehicle deleted successfully.', 'success');
+        setIsDeleteVehicleOpen(false);
+        setVehicleToDelete(null);
         await loadData();
       }
     } catch (err: any) {
@@ -577,9 +583,14 @@ export default function ProfilePage() {
               </div>
 
               {loadingVehicles ? (
-                <div className="text-xs text-smartTextSecondary py-4 text-center">Loading vehicles...</div>
+                <div className="space-y-2">
+                  <LoadingSkeleton variant="rect" height="50px" className="w-full" />
+                  <LoadingSkeleton variant="rect" height="50px" className="w-full" />
+                </div>
               ) : vehicles.length === 0 ? (
-                <div className="text-xs text-smartTextSecondary py-4 text-center">No vehicles registered.</div>
+                <div className="py-4 border border-dashed border-smartBorder/60 rounded-smart text-center text-xs text-smartTextSecondary">
+                  No vehicles registered yet.
+                </div>
               ) : (
                 <div className="space-y-2">
                   {vehicles.map((v) => (
@@ -587,7 +598,7 @@ export default function ProfilePage() {
                       key={v.id}
                       className="p-3 rounded-smart bg-smartSurface/60 border border-smartBorder/60 flex items-center justify-between gap-2"
                     >
-                      <div className="space-y-0.5">
+                      <div className="space-y-0.5 text-left">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-medium text-smartTextPrimary">
                             {v.make} {v.model}
@@ -619,7 +630,10 @@ export default function ProfilePage() {
                         <IconButton
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDeleteVehicle(v.id)}
+                          onClick={() => {
+                            setVehicleToDelete(v);
+                            setIsDeleteVehicleOpen(true);
+                          }}
                         >
                           <Trash2 className="h-3.5 w-3.5 text-smartTextSecondary hover:text-occupied" />
                         </IconButton>
@@ -1318,6 +1332,62 @@ export default function ProfilePage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Delete Vehicle Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteVehicleOpen}
+        onClose={() => {
+          setIsDeleteVehicleOpen(false);
+          setVehicleToDelete(null);
+        }}
+        title="Delete Registered Vehicle?"
+      >
+        <div className="space-y-4 text-xs font-sans text-smartTextSecondary text-left">
+          <div className="flex items-start gap-2.5 bg-occupied/10 border border-occupied/30 p-3 rounded-lg text-occupied">
+            <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-bold text-[11px] uppercase font-mono">Irreversible Action</h4>
+              <p className="text-[10px] mt-0.5 text-occupied/90 leading-relaxed">
+                Deleting vehicle profile registrations will clear ANPR scanner configurations at entrance gates.
+              </p>
+            </div>
+          </div>
+
+          {vehicleToDelete && (
+            <div className="bg-smartBg border border-smartBorder/60 p-3.5 rounded-lg flex flex-col gap-2 font-mono">
+              <div className="flex justify-between border-b border-smartBorder/30 pb-1.5">
+                <span className="text-smartTextSecondary">Vehicle:</span>
+                <span className="text-white font-bold">{vehicleToDelete.make} {vehicleToDelete.model}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-smartTextSecondary">Registration:</span>
+                <span className="text-white">{vehicleToDelete.licensePlate}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-4 border-t border-smartBorder">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setIsDeleteVehicleOpen(false);
+                setVehicleToDelete(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              className="bg-occupied text-white hover:bg-occupied/80 border-transparent h-9 px-4 font-mono uppercase tracking-wider text-[10px]"
+              onClick={handleDeleteVehicle}
+            >
+              Delete Vehicle
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       {/* Toast Notification */}
