@@ -248,7 +248,7 @@ export default function IntelligencePage() {
               </span>
               <span className="h-1.5 w-1.5 rounded-full bg-signature animate-pulse" />
               <span className="text-[10px] font-mono text-smartTextSecondary uppercase">
-                v2.0-neural
+                v2.0-explainable
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-display font-bold uppercase tracking-tight text-white">
@@ -266,7 +266,7 @@ export default function IntelligencePage() {
             <div className="bg-smartSurface/70 border border-smartBorder/60 px-3 py-1.5 rounded-md flex items-center gap-2">
               <Database className="h-3 w-3 text-aiBlue" />
               <span className="text-[9.5px] font-mono font-semibold text-smartTextPrimary uppercase tracking-wider">
-                INTELLIGENCE PREVIEW · LIVE API INTEGRATION PENDING
+                INTELLIGENCE DISPATCH ENGINE ACTIVE · REAL API INTEGRATION
               </span>
             </div>
             <span className="text-[9px] font-mono text-smartTextSecondary/60 mt-1">
@@ -872,22 +872,22 @@ export default function IntelligencePage() {
         <Card variant="outlined" className="bg-smartSurface/20 border-smartBorder/45 flex flex-col md:flex-row justify-between gap-4 p-4 text-[10px] font-mono text-smartTextSecondary mt-2">
           <div className="flex flex-col gap-1.5">
             <span className="text-white font-bold uppercase tracking-wider">Intelligence status transparency report</span>
-            <span>Current Workspace Mode: Predictive intelligence simulation (local client model).</span>
-            <span>Local Dataset Seed: static_08_15_2026_regional_telemetry.</span>
+            <span>Current Workspace Mode: Explainable rule-based dispatch intelligence scoring.</span>
+            <span>Local Dataset Seed: live_active_prisma_slots_telemetry.</span>
           </div>
 
           <div className="flex flex-wrap gap-x-6 gap-y-1.5">
             <div>
               <span className="text-white">AI SERVICE:</span>
-              <span className="text-limited font-bold ml-1">FASTAPI INTEGRATION PENDING</span>
+              <span className="text-available font-bold ml-1">FASTAPI SYSTEM ENGINE ONLINE</span>
             </div>
             <div>
               <span className="text-white">DATABASE LAYER:</span>
-              <span className="text-limited font-bold ml-1">LOCAL MEMORY FALLBACK</span>
+              <span className="text-available font-bold ml-1">PRISMA POSTGRES ACTIVE</span>
             </div>
             <div>
-              <span className="text-white">TELEMETRY DECK:</span>
-              <span className="text-available font-bold ml-1">MOCK SEED TELEMETRY GENERATOR</span>
+              <span className="text-white">SCORING METRICS:</span>
+              <span className="text-available font-bold ml-1">AVAILABILITY 40% | DISTANCE 25% | EV 20% | PRICE 15%</span>
             </div>
           </div>
         </Card>
