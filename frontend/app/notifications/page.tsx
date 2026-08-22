@@ -31,6 +31,7 @@ import { StatusBadge } from '../../components/ui/StatusBadge';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Toast } from '../../components/ui/Toast';
 import { Modal } from '../../components/ui/Modal';
+import { LoadingSkeleton } from '../../components/ui/LoadingSkeleton';
 import { Notification, NotificationType, NotificationFilter } from '../../lib/notificationData';
 import { authService } from '../../lib/auth';
 import { api } from '../../lib/api';
@@ -291,8 +292,10 @@ export default function NotificationsPage() {
 
           {/* 4. ALERTS LIST */}
           {loading ? (
-            <div className="text-center py-12 font-mono text-xs text-smartTextSecondary animate-pulse">
-              Loading notification feed...
+            <div className="flex flex-col gap-3">
+              <LoadingSkeleton variant="rect" height="75px" className="w-full" />
+              <LoadingSkeleton variant="rect" height="75px" className="w-full" />
+              <LoadingSkeleton variant="rect" height="75px" className="w-full" />
             </div>
           ) : filteredNotifications.length > 0 ? (
             <div className="flex flex-col gap-2.5">

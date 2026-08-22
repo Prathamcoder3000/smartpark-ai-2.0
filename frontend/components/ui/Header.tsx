@@ -8,17 +8,42 @@ import { Menu, X, Bell, User, Search, Map, Sparkles } from 'lucide-react';
 import { IconButton } from './IconButton';
 import { Button } from './Button';
 import { authService } from '../../lib/auth';
+import { api } from '../../lib/api';
 
 export const Header: React.FC = () => {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [isAuthenticated, setIsAuthenticated] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
+  const [unreadCount, setUnreadCount] = React.useState(0);
+
+  const fetchUnreadCount = React.useCallback(async () => {
+    try {
+      const authed = authService.isAuthenticated();
+      if (authed) {
+        const res = await api.get('/api/notifications?unread=true');
+        if (res && res.success && Array.isArray(res.data)) {
+          setUnreadCount(res.data.length);
+          return;
+        }
+      }
+      setUnreadCount(0);
+    } catch (e) {
+      console.error(e);
+      setUnreadCount(0);
+    }
+  }, []);
 
   React.useEffect(() => {
     setMounted(true);
-    setIsAuthenticated(authService.isAuthenticated());
-  }, [pathname]);
+    const authed = authService.isAuthenticated();
+    setIsAuthenticated(authed);
+    if (authed) {
+      fetchUnreadCount();
+      const interval = setInterval(fetchUnreadCount, 15000);
+      return () => clearInterval(interval);
+    }
+  }, [pathname, fetchUnreadCount]);
 
   const navItems = [
     { label: 'Overview', href: '/home' },
@@ -112,7 +137,11 @@ export const Header: React.FC = () => {
                   >
                     <Bell className={`h-3.5 w-3.5 ${pathname === '/notifications' ? 'text-signature' : 'text-smartTextSecondary'}`} />
                   </IconButton>
-                  <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-signature ring-1 ring-smartBg" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1 right-1 h-3.5 w-3.5 rounded-full bg-signature ring-1 ring-smartBg text-[7.5px] font-mono font-bold text-black flex items-center justify-center pointer-events-none select-none">
+                      {unreadCount}
+                    </span>
+                  )}
                 </Link>
 
                 {/* Profile Avatar */}
