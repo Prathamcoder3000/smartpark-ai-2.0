@@ -1074,7 +1074,7 @@ export default function ProfilePage() {
               onClick={() => {
                 authService.logout();
                 setIsLogoutModalOpen(false);
-                showToast('Mock session signed out successfully.', 'info');
+                showToast('Session signed out successfully.', 'info');
                 setTimeout(() => {
                   router.push('/');
                 }, 1000);
