@@ -24,12 +24,12 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { IconButton } from '../../components/ui/IconButton';
 import { Badge } from '../../components/ui/Badge';
-import { StatusBadge } from '../../components/ui/StatusBadge';
+import { StatusBadge, ParkingStatusType } from '../../components/ui/StatusBadge';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { Toast } from '../../components/ui/Toast';
 import { Modal } from '../../components/ui/Modal';
-import { ParkingSlot } from '../../components/ui/ParkingSlot';
+import { ParkingSlot, ParkingSlotState } from '../../components/ui/ParkingSlot';
 import { LoadingSkeleton } from '../../components/ui/LoadingSkeleton';
 import {
   MOCK_FACILITY_DETAILS,
@@ -43,7 +43,7 @@ import {
   ReservationSelection,
   ReservationSummary
 } from '../../lib/reservationData';
-import { api } from '../../lib/api';
+import { api, BASE_URL } from '../../lib/api';
 import { authService } from '../../lib/auth';
 
 const mapIdToBackend = (idOrSlug: string): string => {
@@ -111,6 +111,74 @@ export default function ReservePage() {
     setToastOpen(true);
   };
 
+  const loadFacilityDetails = async (facId: string) => {
+    try {
+      const backendId = mapIdToBackend(facId);
+      
+      const [facRes, floorsRes, slotsRes] = await Promise.all([
+        fetch(`${BASE_URL}/api/facilities/${backendId}`),
+        fetch(`${BASE_URL}/api/facilities/${backendId}/floors`),
+        fetch(`${BASE_URL}/api/facilities/${backendId}/slots`)
+      ]);
+
+      const facJson = await facRes.json();
+      const floorsJson = await floorsRes.json();
+      const slotsJson = await slotsRes.json();
+
+      if (facJson.success && floorsJson.success && slotsJson.success) {
+        const matchedApi = facJson.data.facility;
+        const template = MOCK_FACILITY_DETAILS.find((m) => mapIdToBackend(m.id) === matchedApi.id) || MOCK_FACILITY_DETAILS[0];
+        
+        const floors = floorsJson.data.map((fl: any, idx: number) => {
+          const floorTemplate = template.floors.find(ft => ft.id === fl.name || ft.id === String(fl.level)) || template.floors[idx] || template.floors[0];
+          
+          const floorSlots = slotsJson.data.filter((s: any) => s.floorId === fl.id);
+          const slots = floorSlots.map((s: any) => ({
+            id: s.id,
+            slotNumber: s.slotNumber,
+            state: s.status as ParkingSlotState,
+            isEV: s.isEVCharging,
+            isDisabled: s.status === 'DISABLED'
+          }));
+          
+          const totalBays = slots.length;
+          const availableBays = slots.filter((s: any) => s.state === 'AVAILABLE').length;
+          const occupiedBays = slots.filter((s: any) => s.state === 'OCCUPIED').length;
+          const reservedBays = slots.filter((s: any) => s.state === 'RESERVED').length;
+
+          return {
+            ...floorTemplate,
+            id: floorTemplate.id,
+            dbFloorId: fl.id,
+            name: fl.name,
+            totalBays: totalBays > 0 ? totalBays : floorTemplate.totalBays,
+            availableBays: totalBays > 0 ? availableBays : floorTemplate.availableBays,
+            occupiedBays: totalBays > 0 ? occupiedBays : floorTemplate.occupiedBays,
+            reservedBays: totalBays > 0 ? reservedBays : floorTemplate.reservedBays,
+            slots: slots.length > 0 ? slots : floorTemplate.slots
+          };
+        });
+
+        const currentFacilityDetails = {
+          ...template,
+          id: mapIdToFrontend(matchedApi.id),
+          name: matchedApi.name,
+          address: matchedApi.address,
+          availableBays: facJson.data.availabilitySummary.available,
+          totalBays: facJson.data.capacitySummary.totalCapacity,
+          occupiedBays: facJson.data.availabilitySummary.occupied,
+          occupancyPct: facJson.data.capacitySummary.occupancyPercentage,
+          status: (facJson.data.availabilitySummary.available > 0 ? 'AVAILABLE' : 'LIMITED') as ParkingStatusType,
+          floors
+        };
+
+        setFacilitiesList(prev => prev.map(f => f.id === facId || mapIdToBackend(f.id) === backendId ? currentFacilityDetails : f));
+      }
+    } catch (err) {
+      console.error('Failed to load facility detailed slots:', err);
+    }
+  };
+
   const loadData = React.useCallback(async () => {
     try {
       setLoading(true);
@@ -131,49 +199,32 @@ export default function ReservePage() {
         }
       }
 
-      // Fetch facilities list
+      // Fetch facilities list summary
       const fRes = await api.get('/api/facilities');
       if (fRes.success && Array.isArray(fRes.data)) {
         const mappedFac = MOCK_FACILITY_DETAILS.map(template => {
           const apiF = fRes.data.find((item: any) => item.id === mapIdToBackend(template.id));
           if (!apiF) return template;
-
-          const floors = template.floors.map(floorTemplate => {
-            const apiFloor = apiF.floors?.find((fl: any) => fl.level === floorTemplate.id) || {};
-            const slots = (apiFloor.slots || []).map((s: any) => ({
-              id: s.id,
-              state: s.status,
-              isEV: s.isEVCharging,
-              isDisabled: s.status === 'DISABLED'
-            }));
-
-            return {
-              ...floorTemplate,
-              slots: slots.length > 0 ? slots : floorTemplate.slots
-            };
-          });
-
           return {
             ...template,
             availableBays: apiF.availableSlots,
             totalBays: apiF.totalCapacity,
-            floors
           };
         });
 
         setFacilitiesList(mappedFac);
 
         // Resolve selected facility
-        let defaultFac = mappedFac[0];
+        let defaultFacId = mappedFac[0].id;
         if (initialFacilitySlug) {
           const match = mappedFac.find(
             (f) => f.slug === initialFacilitySlug || f.id === initialFacilitySlug || mapIdToBackend(f.id) === mapIdToBackend(initialFacilitySlug)
           );
-          if (match) defaultFac = match;
+          if (match) defaultFacId = match.id;
         }
 
-        setSelectedFacilityId(defaultFac.id);
-        setActiveFloorTab(initialFloorId || defaultFac.floors[0].id);
+        setSelectedFacilityId(defaultFacId);
+        await loadFacilityDetails(defaultFacId);
       }
     } catch (err: any) {
       console.error(err);
@@ -181,7 +232,7 @@ export default function ReservePage() {
     } finally {
       setLoading(false);
     }
-  }, [initialFacilitySlug, initialFloorId]);
+  }, [initialFacilitySlug]);
 
   React.useEffect(() => {
     const authed = authService.isAuthenticated();
@@ -191,6 +242,12 @@ export default function ReservePage() {
       loadData();
     }
   }, [router, loadData]);
+
+  React.useEffect(() => {
+    if (selectedFacilityId) {
+      loadFacilityDetails(selectedFacilityId);
+    }
+  }, [selectedFacilityId]);
 
   React.useEffect(() => {
     if (initialSlotId) {
