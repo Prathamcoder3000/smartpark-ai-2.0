@@ -96,60 +96,80 @@ export default function FacilityDetailsPage() {
   const loadData = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const res = await fetch(`${BASE_URL}/api/facilities`);
-      const json = await res.json();
-      if (json.success && Array.isArray(json.data)) {
-        const matchedApi = json.data.find((f: any) => f.id === mapIdToBackend(facilityId) || mapIdToFrontend(f.id) === facilityId);
-        if (matchedApi) {
-          const template = MOCK_FACILITY_DETAILS.find((m) => mapIdToBackend(m.id) === matchedApi.id) || MOCK_FACILITY_DETAILS[0];
+      const backendId = mapIdToBackend(facilityId);
+      
+      const [facRes, floorsRes, slotsRes] = await Promise.all([
+        fetch(`${BASE_URL}/api/facilities/${backendId}`),
+        fetch(`${BASE_URL}/api/facilities/${backendId}/floors`),
+        fetch(`${BASE_URL}/api/facilities/${backendId}/slots`)
+      ]);
+
+      const facJson = await facRes.json();
+      const floorsJson = await floorsRes.json();
+      const slotsJson = await slotsRes.json();
+
+      if (facJson.success && floorsJson.success && slotsJson.success) {
+        const matchedApi = facJson.data.facility;
+        const template = MOCK_FACILITY_DETAILS.find((m) => mapIdToBackend(m.id) === matchedApi.id) || MOCK_FACILITY_DETAILS[0];
+        
+        const floors = floorsJson.data.map((fl: any, idx: number) => {
+          const floorTemplate = template.floors.find(ft => ft.id === fl.name || ft.id === String(fl.level)) || template.floors[idx] || template.floors[0];
           
-          const floors = template.floors.map(floorTemplate => {
-            const apiFloor = matchedApi.floors?.find((fl: any) => fl.level === floorTemplate.id) || {};
-            const slots = (apiFloor.slots || []).map((s: any) => ({
-              id: s.id,
-              slotNumber: s.slotNumber,
-              state: s.status as ParkingSlotState,
-              isEV: s.isEVCharging,
-              isDisabled: s.status === 'DISABLED'
-            }));
-            
-            const totalBays = slots.length;
-            const availableBays = slots.filter((s: any) => s.state === 'AVAILABLE').length;
-            const occupiedBays = slots.filter((s: any) => s.state === 'OCCUPIED').length;
-            const reservedBays = slots.filter((s: any) => s.state === 'RESERVED').length;
+          const floorSlots = slotsJson.data.filter((s: any) => s.floorId === fl.id);
+          const slots = floorSlots.map((s: any) => ({
+            id: s.id,
+            slotNumber: s.slotNumber,
+            state: s.status as ParkingSlotState,
+            isEV: s.isEVCharging,
+            isDisabled: s.status === 'DISABLED'
+          }));
+          
+          const totalBays = slots.length;
+          const availableBays = slots.filter((s: any) => s.state === 'AVAILABLE').length;
+          const occupiedBays = slots.filter((s: any) => s.state === 'OCCUPIED').length;
+          const reservedBays = slots.filter((s: any) => s.state === 'RESERVED').length;
 
-            return {
-              ...floorTemplate,
-              slots: slots.length > 0 ? slots : floorTemplate.slots,
-              totalBays: slots.length > 0 ? totalBays : floorTemplate.totalBays,
-              availableBays: slots.length > 0 ? availableBays : floorTemplate.availableBays,
-              occupiedBays: slots.length > 0 ? occupiedBays : floorTemplate.occupiedBays,
-              reservedBays: slots.length > 0 ? reservedBays : floorTemplate.reservedBays
-            };
-          });
-
-          const currentFacilityDetails = {
-            ...template,
-            id: mapIdToFrontend(matchedApi.id),
-            name: matchedApi.name,
-            availableBays: matchedApi.availableSlots,
-            totalBays: matchedApi.totalCapacity,
-            occupiedBays: matchedApi.totalCapacity - matchedApi.availableSlots,
-            occupancyPct: matchedApi.occupancyPercentage,
-            status: matchedApi.availableSlots > 0 ? 'AVAILABLE' : 'LIMITED',
-            floors
+          return {
+            ...floorTemplate,
+            id: floorTemplate.id,
+            dbFloorId: fl.id,
+            name: fl.name,
+            totalBays: totalBays > 0 ? totalBays : floorTemplate.totalBays,
+            availableBays: totalBays > 0 ? availableBays : floorTemplate.availableBays,
+            occupiedBays: totalBays > 0 ? occupiedBays : floorTemplate.occupiedBays,
+            reservedBays: totalBays > 0 ? reservedBays : floorTemplate.reservedBays,
+            slots: slots.length > 0 ? slots : floorTemplate.slots
           };
+        });
 
-          setFacility(currentFacilityDetails);
-          
-          // Set default floor active tab if not set
-          if (!activeFloorTab && floors.length > 0) {
-            setActiveFloorTab(floors[0].id);
-          }
+        const currentFacilityDetails = {
+          ...template,
+          id: mapIdToFrontend(matchedApi.id),
+          name: matchedApi.name,
+          address: matchedApi.address,
+          availableBays: facJson.data.availabilitySummary.available,
+          totalBays: facJson.data.capacitySummary.totalCapacity,
+          occupiedBays: facJson.data.availabilitySummary.occupied,
+          occupancyPct: facJson.data.capacitySummary.occupancyPercentage,
+          status: facJson.data.availabilitySummary.available > 0 ? 'AVAILABLE' : 'LIMITED',
+          floors
+        };
+
+        setFacility(currentFacilityDetails);
+        
+        // Set default floor active tab if not set
+        if (!activeFloorTab && floors.length > 0) {
+          setActiveFloorTab(floors[0].id);
         }
       }
     } catch (err) {
       console.error('Failed to load facility data:', err);
+      // Graceful fallback to mock details in case of backend server issues
+      const template = MOCK_FACILITY_DETAILS.find((m) => mapIdToBackend(m.id) === mapIdToBackend(facilityId)) || MOCK_FACILITY_DETAILS[0];
+      setFacility(template);
+      if (!activeFloorTab && template.floors.length > 0) {
+        setActiveFloorTab(template.floors[0].id);
+      }
     } finally {
       setLoading(false);
     }

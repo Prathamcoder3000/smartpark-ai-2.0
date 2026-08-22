@@ -54,7 +54,7 @@ export const ParkingSlot: React.FC<ParkingSlotProps> = ({
   onClick,
   className = '',
 }) => {
-  const isInteractive = !!onClick && state !== 'OCCUPIED';
+  const isInteractive = !!onClick && state !== 'OCCUPIED' && state !== 'RESERVED';
 
   const stateConfigs = {
     AVAILABLE: {
@@ -95,7 +95,7 @@ export const ParkingSlot: React.FC<ParkingSlotProps> = ({
     <motion.button
       type="button"
       onClick={() => isInteractive && onClick && onClick(id)}
-      disabled={state === 'OCCUPIED'}
+      disabled={state === 'OCCUPIED' || state === 'RESERVED'}
       whileHover={isInteractive ? { scale: 1.02 } : {}}
       whileTap={isInteractive ? { scale: 0.98 } : {}}
       className={`relative flex flex-col items-center justify-between py-2.5 h-28 w-16 border-x-2 border-dashed ${
