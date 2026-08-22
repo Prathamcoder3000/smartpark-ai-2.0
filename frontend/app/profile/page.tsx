@@ -226,8 +226,6 @@ export default function ProfilePage() {
   }, [router, loadData]);
 
   // Modal states
-  const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
-  const [isPasswordModalOpen, setIsPasswordModalOpen] = React.useState(false);
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = React.useState(false);
   const [isTermsModalOpen, setIsTermsModalOpen] = React.useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = React.useState(false);
@@ -243,42 +241,7 @@ export default function ProfilePage() {
     setToast({ isOpen: true, message, type });
   };
 
-  // Edit Profile Form State & Validation
-  const [editForm, setEditForm] = React.useState({
-    name: profile.name,
-    email: profile.email,
-    phone: profile.phone,
-    location: profile.location,
-  });
 
-  const [editErrors, setEditErrors] = React.useState<{ [key: string]: string }>({});
-
-  const handleEditSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const errors: { [key: string]: string } = {};
-
-    if (!editForm.name.trim()) errors.name = 'Name is required';
-    if (!editForm.email.trim() || !editForm.email.includes('@')) errors.email = 'Valid email is required';
-    if (!editForm.phone.trim()) errors.phone = 'Phone number is required';
-    if (!editForm.location.trim()) errors.location = 'Preferred location is required';
-
-    if (Object.keys(errors).length > 0) {
-      setEditErrors(errors);
-      return;
-    }
-
-    setProfile((prev) => ({
-      ...prev,
-      name: editForm.name,
-      email: editForm.email,
-      phone: editForm.phone,
-      location: editForm.location,
-    }));
-
-    setEditErrors({});
-    setIsEditModalOpen(false);
-    showToast('Account details updated successfully.');
-  };
 
   // Saved parking removal handler
   const handleRemoveSavedFacility = (id: string, name: string) => {
@@ -414,23 +377,6 @@ export default function ProfilePage() {
                   <User className="h-4 w-4 text-signature" />
                   Account Information
                 </h3>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    setEditForm({
-                      name: profile.name,
-                      email: profile.email,
-                      phone: profile.phone,
-                      location: profile.location,
-                    });
-                    setIsEditModalOpen(true);
-                  }}
-                  className="h-7 text-[11px]"
-                >
-                  <Edit3 className="h-3 w-3 mr-1" />
-                  Edit Profile
-                </Button>
               </div>
 
               <div className="space-y-3 text-xs">
@@ -477,17 +423,6 @@ export default function ProfilePage() {
               </h3>
 
               <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setIsPasswordModalOpen(true)}
-                  className="w-full flex items-center justify-between p-2.5 rounded-smart bg-smartSurface/60 border border-smartBorder/60 hover:border-smartBorder hover:bg-smartElevated transition-all text-xs font-sans text-smartTextPrimary group"
-                >
-                  <span className="flex items-center gap-2">
-                    <Lock className="h-3.5 w-3.5 text-smartTextSecondary group-hover:text-signature transition-colors" />
-                    Change Password
-                  </span>
-                  <span className="text-[10px] font-mono text-smartTextSecondary">Backend Pending</span>
-                </button>
 
                 <button
                   type="button"
@@ -1065,80 +1000,7 @@ export default function ProfilePage() {
 
       {/* -------------------------------------------------- */}
       {/* MODALS */}
-      {/* -------------------------------------------------- */}
-
-      {/* Edit Profile Modal */}
-      <Modal
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        title="Edit Profile Information"
-      >
-        <form onSubmit={handleEditSubmit} className="space-y-4">
-          <Input
-            label="Full Name"
-            value={editForm.name}
-            onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-            error={editErrors.name}
-          />
-          <Input
-            label="Email Address"
-            type="email"
-            value={editForm.email}
-            onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-            error={editErrors.email}
-          />
-          <Input
-            label="Phone Number"
-            value={editForm.phone}
-            onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-            error={editErrors.phone}
-          />
-          <Input
-            label="Preferred Location / Area"
-            value={editForm.location}
-            onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
-            error={editErrors.location}
-          />
-
-          <div className="pt-4 border-t border-smartBorder flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => setIsEditModalOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" size="sm">
-              Save Changes
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Change Password Info Modal */}
-      <Modal
-        isOpen={isPasswordModalOpen}
-        onClose={() => setIsPasswordModalOpen(false)}
-        title="Change Password"
-      >
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 p-3 rounded bg-signature/10 border border-signature/30 text-signature">
-            <Lock className="h-5 w-5 shrink-0" />
-            <p className="text-xs font-sans">
-              Password management and multi-factor authentication will be connected to backend authentication services in a future release.
-            </p>
-          </div>
-          <p className="text-xs text-smartTextSecondary leading-relaxed">
-            Your current account session is secured via local JWT tokens. Real credential modification requires active authentication database connection.
-          </p>
-          <div className="flex justify-end pt-2">
-            <Button variant="secondary" size="sm" onClick={() => setIsPasswordModalOpen(false)}>
-              Understand & Close
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      {/* ------------------------------------------------</Modal>
 
       {/* Privacy Modal */}
       <Modal
