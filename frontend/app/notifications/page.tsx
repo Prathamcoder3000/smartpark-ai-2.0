@@ -44,6 +44,7 @@ export default function NotificationsPage() {
 
   const [activeFilter, setActiveFilter] = React.useState<NotificationFilter>('ALL');
   const [selectedNotification, setSelectedNotification] = React.useState<Notification | null>(null);
+  const [isProcessing, setIsProcessing] = React.useState(false);
 
   // Toast notifications
   const [toastOpen, setToastOpen] = React.useState(false);
@@ -104,7 +105,9 @@ export default function NotificationsPage() {
   // Handle Mark as Read
   const handleToggleRead = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    if (isProcessing) return;
     try {
+      setIsProcessing(true);
       const res = await api.put(`/api/notifications/${id}/read`);
       if (res.success) {
         triggerToast('Notification marked as read.', 'success');
@@ -112,13 +115,17 @@ export default function NotificationsPage() {
       }
     } catch (err: any) {
       triggerToast(err.message || 'Action failed.', 'error');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   // Handle Delete
   const handleDelete = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    if (isProcessing) return;
     try {
+      setIsProcessing(true);
       const res = await api.delete(`/api/notifications/${id}`);
       if (res.success) {
         triggerToast('Notification permanently dismissed.', 'warning');
@@ -129,12 +136,16 @@ export default function NotificationsPage() {
       }
     } catch (err: any) {
       triggerToast(err.message || 'Delete failed.', 'error');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   // Mark all read
   const handleMarkAllRead = async () => {
+    if (isProcessing) return;
     try {
+      setIsProcessing(true);
       const res = await api.put('/api/notifications/read-all');
       if (res.success) {
         triggerToast('All notifications marked as read.', 'success');
@@ -142,13 +153,16 @@ export default function NotificationsPage() {
       }
     } catch (err: any) {
       triggerToast(err.message || 'Action failed.', 'error');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   // Clear all notifications
   const handleClearAll = async () => {
+    if (isProcessing) return;
     try {
-      // Dismiss all one by one or filter locally if needed
+      setIsProcessing(true);
       for (const n of notifications) {
         await api.delete(`/api/notifications/${n.id}`);
       }
@@ -156,6 +170,8 @@ export default function NotificationsPage() {
       await loadNotifications();
     } catch (err: any) {
       triggerToast(err.message || 'Action failed.', 'error');
+    } finally {
+      setIsProcessing(false);
     }
   };
 

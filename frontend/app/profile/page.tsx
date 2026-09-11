@@ -72,6 +72,7 @@ export default function ProfilePage() {
   const [vehicles, setVehicles] = React.useState<any[]>([]);
   const [loadingVehicles, setLoadingVehicles] = React.useState(true);
   const [loadingBookings, setLoadingBookings] = React.useState(true);
+  const [isSubmittingVehicle, setIsSubmittingVehicle] = React.useState(false);
 
   // New vehicle modal states
   const [isAddVehicleOpen, setIsAddVehicleOpen] = React.useState(false);
@@ -152,12 +153,14 @@ export default function ProfilePage() {
 
   const handleAddVehicleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingVehicle) return;
     if (!vehForm.licensePlate.trim() || !vehForm.make.trim() || !vehForm.model.trim()) {
       showToast('Make, model, and license plate are required.', 'error');
       return;
     }
 
     try {
+      setIsSubmittingVehicle(true);
       const res = await api.post('/api/vehicles', {
         licensePlate: vehForm.licensePlate.toUpperCase().trim(),
         make: vehForm.make.trim(),
@@ -174,18 +177,21 @@ export default function ProfilePage() {
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to register vehicle.', 'error');
+    } finally {
+      setIsSubmittingVehicle(false);
     }
   };
 
   const handleEditVehicleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedVehicle) return;
+    if (!selectedVehicle || isSubmittingVehicle) return;
     if (!vehForm.licensePlate.trim() || !vehForm.make.trim() || !vehForm.model.trim()) {
       showToast('Make, model, and license plate are required.', 'error');
       return;
     }
 
     try {
+      setIsSubmittingVehicle(true);
       const res = await api.put(`/api/vehicles/${selectedVehicle.id}`, {
         licensePlate: vehForm.licensePlate.toUpperCase().trim(),
         make: vehForm.make.trim(),
@@ -203,12 +209,15 @@ export default function ProfilePage() {
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to update vehicle.', 'error');
+    } finally {
+      setIsSubmittingVehicle(false);
     }
   };
 
   const handleDeleteVehicle = async () => {
-    if (!vehicleToDelete) return;
+    if (!vehicleToDelete || isSubmittingVehicle) return;
     try {
+      setIsSubmittingVehicle(true);
       const res = await api.delete(`/api/vehicles/${vehicleToDelete.id}`);
       if (res.success) {
         showToast('Vehicle deleted successfully.', 'success');
@@ -218,6 +227,8 @@ export default function ProfilePage() {
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to delete vehicle.', 'error');
+    } finally {
+      setIsSubmittingVehicle(false);
     }
   };
 

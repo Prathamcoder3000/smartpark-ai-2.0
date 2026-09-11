@@ -28,7 +28,33 @@ for (const env of requiredEnv) {
   }
 }
 
-const server = Fastify({ logger: true });
+const server = Fastify({
+  logger: {
+    serializers: {
+      req(req) {
+        return {
+          method: req.method,
+          url: req.url,
+          hostname: req.hostname,
+          remoteAddress: req.ip
+        };
+      }
+    }
+  }
+});
+
+// Security headers hook
+server.addHook('onSend', (request, reply, payload, done) => {
+  reply.header('x-content-type-options', 'nosniff');
+  reply.header('x-frame-options', 'DENY');
+  reply.header('x-xss-protection', '1; mode=block');
+  reply.header('referrer-policy', 'strict-origin-when-cross-origin');
+  
+  if (!request.url.startsWith('/api/realtime')) {
+    reply.header('cache-control', 'no-store, max-age=0, must-revalidate');
+  }
+  done(null, payload);
+});
 
 server.setErrorHandler((error, request, reply) => {
   const err = error as any;
@@ -47,16 +73,26 @@ server.setErrorHandler((error, request, reply) => {
 });
 
 const start = async () => {
-  // CORS setup
+  // Hardened CORS setup
   const frontendUrl = process.env.FRONTEND_URL;
   await server.register(cors, {
-    origin: frontendUrl && frontendUrl !== '*' ? frontendUrl : true,
+    origin: (origin, cb) => {
+      // In dev or test if origin is missing or wildcard frontendUrl, allow
+      if (!origin || !frontendUrl || frontendUrl === '*') {
+        return cb(null, true);
+      }
+      const allowedOrigins = frontendUrl.split(',').map(s => s.trim());
+      if (allowedOrigins.includes(origin)) {
+        return cb(null, true);
+      }
+      return cb(new Error('CORS origin not allowed'), false);
+    },
     credentials: true,
   });
 
-  // Rate Limiting
+  // Global Rate Limiting
   await server.register(rateLimit, {
-    max: 1000,
+    max: Number(process.env.RATE_LIMIT_GLOBAL_MAX ?? 1000),
     timeWindow: '1 minute',
     errorResponseBuilder: (request, context) => ({
       success: false,
@@ -120,3 +156,4 @@ const start = async () => {
 };
 
 start();
+

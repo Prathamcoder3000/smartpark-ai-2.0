@@ -102,31 +102,36 @@ export async function reservationRoutes(fastify: FastifyInstance, options: Fasti
         }
       }
 
-      // Double-booking check: verify slot has no active reservations overlapping requested range
-      const overlapping = await prisma.reservation.findFirst({
-        where: {
-          slotId,
-          status: {
-            notIn: [ReservationStatus.CANCELLED, ReservationStatus.EXPIRED, ReservationStatus.COMPLETED]
-          },
-          startTime: { lt: end },
-          endTime: { gt: start }
-        }
-      });
-
-      if (overlapping) {
-        return reply.status(409).send({
-          success: false,
-          error: {
-            code: 'SLOT_UNAVAILABLE',
-            message: 'Parking slot is not available for the selected time.'
-          }
-        });
-      }
-
       const calculatedPrice = calculatePrice(startTime, endTime);
 
       const result = await prisma.$transaction(async (tx) => {
+        // 1. Lock slot row to serialize concurrent reservation attempts on the same slot
+        const currentSlot = await tx.parkingSlot.update({
+          where: { id: slotId },
+          data: { updatedAt: new Date() }
+        });
+
+        if (currentSlot.status === 'DISABLED') {
+          return { errorStatus: 400, errorCode: 'BAD_REQUEST', errorMessage: 'Selected parking slot is currently disabled.' };
+        }
+
+        // 2. Double-booking check inside serialized transaction boundary
+        const overlapping = await tx.reservation.findFirst({
+          where: {
+            slotId,
+            status: {
+              notIn: [ReservationStatus.CANCELLED, ReservationStatus.EXPIRED, ReservationStatus.COMPLETED]
+            },
+            startTime: { lt: end },
+            endTime: { gt: start }
+          }
+        });
+
+        if (overlapping) {
+          return { errorStatus: 409, errorCode: 'SLOT_UNAVAILABLE', errorMessage: 'Parking slot is not available for the selected time.' };
+        }
+
+        // 3. Create confirmed reservation
         const reservation = await tx.reservation.create({
           data: {
             userId,
@@ -149,8 +154,8 @@ export async function reservationRoutes(fastify: FastifyInstance, options: Fasti
           }
         });
 
-        // Reserve slot if currently AVAILABLE
-        if (slot.status === 'AVAILABLE') {
+        // 4. Reserve slot if currently AVAILABLE
+        if (currentSlot.status === 'AVAILABLE') {
           await tx.parkingSlot.update({
             where: { id: slotId },
             data: { status: 'RESERVED' }
@@ -167,15 +172,23 @@ export async function reservationRoutes(fastify: FastifyInstance, options: Fasti
           }
         });
 
-        return reservation;
+        return { reservation };
       });
 
-      emitReservationUpdate(result.facilityId, result.id, result.status, result.slotId);
-      emitAvailabilityUpdate(result.facilityId);
+      if (result.errorStatus) {
+        return reply.status(result.errorStatus).send({
+          success: false,
+          error: { code: result.errorCode, message: result.errorMessage }
+        });
+      }
+
+      const createdRes = result.reservation!;
+      emitReservationUpdate(createdRes.facilityId, createdRes.id, createdRes.status, createdRes.slotId);
+      emitAvailabilityUpdate(createdRes.facilityId);
 
       return reply.status(201).send({
         success: true,
-        data: result
+        data: createdRes
       });
     } catch (error: any) {
       fastify.log.error(error);

@@ -269,8 +269,12 @@ export const Header: React.FC = () => {
                       <User className="h-3.5 w-3.5 text-signature" />
                     </div>
                     <div>
-                      <div className="text-xs font-semibold text-smartTextPrimary">Pratham</div>
-                      <div className="text-[9px] text-smartTextSecondary">Active Operator Session</div>
+                      <div className="text-xs font-semibold text-smartTextPrimary">
+                        {authService.getCurrentUser()?.name || 'SmartPark User'}
+                      </div>
+                      <div className="text-[9px] text-smartTextSecondary uppercase">
+                        {authService.getCurrentUser()?.role ? `${authService.getCurrentUser()?.role} Session` : 'Active Session'}
+                      </div>
                     </div>
                   </Link>
                 ) : mounted ? (

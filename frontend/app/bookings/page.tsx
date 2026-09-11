@@ -49,6 +49,7 @@ export default function BookingsPage() {
   const [bookingToCancel, setBookingToCancel] = React.useState<Booking | null>(null);
   const [bookingToCheckOut, setBookingToCheckOut] = React.useState<Booking | null>(null);
   const [focusedPassBooking, setFocusedPassBooking] = React.useState<Booking | null>(null);
+  const [isProcessing, setIsProcessing] = React.useState<boolean>(false);
 
   // Toast notifications
   const [toastOpen, setToastOpen] = React.useState<boolean>(false);
@@ -218,7 +219,9 @@ export default function BookingsPage() {
 
   // Check In Handler
   const handleCheckIn = async (bookingId: string) => {
+    if (isProcessing) return;
     try {
+      setIsProcessing(true);
       const res = await api.post(`/api/bookings/${bookingId}/check-in`);
       if (res.success) {
         showToast('Successfully checked in! Physical gate opened.', 'success');
@@ -226,13 +229,16 @@ export default function BookingsPage() {
       }
     } catch (err: any) {
       showToast(err.message || 'Check-in failed.', 'error');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   // Confirm Check Out (initiates check-out)
   const handleCheckOut = async () => {
-    if (!bookingToCheckOut) return;
+    if (!bookingToCheckOut || isProcessing) return;
     try {
+      setIsProcessing(true);
       const res = await api.post(`/api/bookings/${bookingToCheckOut.id}/check-out`);
       if (res.success) {
         showToast(`Successfully checked out! Charged: ₹${res.data.finalAmount}.`, 'success');
@@ -241,13 +247,16 @@ export default function BookingsPage() {
       }
     } catch (err: any) {
       showToast(err.message || 'Check-out failed.', 'error');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   // Cancel reservation callback
   const handleCancelBooking = async () => {
-    if (!bookingToCancel) return;
+    if (!bookingToCancel || isProcessing) return;
     try {
+      setIsProcessing(true);
       let res;
       if (bookingToCancel.isReservationOnly) {
         res = await api.delete(`/api/reservations/${bookingToCancel.id}`);
@@ -265,6 +274,8 @@ export default function BookingsPage() {
       }
     } catch (err: any) {
       showToast(err.message || 'Cancellation failed.', 'error');
+    } finally {
+      setIsProcessing(false);
     }
   };
 

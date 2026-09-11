@@ -77,6 +77,7 @@ export default function ReservePage() {
 
   const [step, setStep] = React.useState<number>(1);
   const [loading, setLoading] = React.useState(true);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const initialFacilitySlug = searchParams?.get('facility') || '';
   const initialSlotId = searchParams?.get('slot') || '';
@@ -360,9 +361,10 @@ export default function ReservePage() {
   };
 
   const handleConfirmReservation = async () => {
-    if (!facility || !activeFloor) return;
+    if (!facility || !activeFloor || isSubmitting) return;
 
     try {
+      setIsSubmitting(true);
       const startHour = parseInt(startTime.split(':')[0]) || 9;
       const startD = new Date(reservationDate);
       startD.setHours(startHour, 0, 0, 0);
@@ -425,6 +427,8 @@ export default function ReservePage() {
       }
     } catch (err: any) {
       triggerToast(err.message || 'Reservation failed. Slot may have been booked.', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -859,9 +863,10 @@ export default function ReservePage() {
                 <Button
                   variant="primary"
                   onClick={handleConfirmReservation}
+                  disabled={isSubmitting}
                   className="w-full sm:w-2/3 text-xs h-10 justify-center gap-1.5 uppercase font-mono tracking-wider"
                 >
-                  Confirm Reservation
+                  {isSubmitting ? 'Processing Permit...' : 'Confirm Reservation'}
                   <CheckCircle className="h-4 w-4" />
                 </Button>
               </div>

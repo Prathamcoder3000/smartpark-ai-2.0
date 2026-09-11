@@ -8,7 +8,7 @@ export async function authRoutes(fastify: FastifyInstance, options: FastifyPlugi
   fastify.post('/signup', {
     config: {
       rateLimit: {
-        max: Number(process.env.RATE_LIMIT_SIGNUP_MAX ?? 10),
+        max: Number(process.env.RATE_LIMIT_SIGNUP_MAX ?? 30),
         timeWindow: '1 minute'
       }
     }
@@ -95,7 +95,7 @@ export async function authRoutes(fastify: FastifyInstance, options: FastifyPlugi
   fastify.post('/login', {
     config: {
       rateLimit: {
-        max: Number(process.env.RATE_LIMIT_LOGIN_MAX ?? 15),
+        max: Number(process.env.RATE_LIMIT_LOGIN_MAX ?? 50),
         timeWindow: '1 minute'
       }
     }

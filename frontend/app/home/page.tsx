@@ -128,6 +128,7 @@ export default function HomePage() {
   // Page States
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Toast state
@@ -189,18 +190,24 @@ export default function HomePage() {
 
   // Handle Reservation Cancellation
   const handleCancelReservation = async (reservationId: string) => {
+    if (isProcessing) return;
     try {
+      setIsProcessing(true);
       await api.delete(`/api/reservations/${reservationId}`);
       triggerToast('Reservation cancelled successfully.', 'success');
       fetchDashboardData(true);
     } catch (err: any) {
       triggerToast(err.message || 'Failed to cancel reservation.', 'error');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   // Handle Convert Reservation to Booking & Check-In
   const handleCheckInReservation = async (reservationId: string) => {
+    if (isProcessing) return;
     try {
+      setIsProcessing(true);
       // 1. Create booking
       const bookRes = await api.post('/api/bookings', { reservationId });
       if (!bookRes.success) throw new Error(bookRes.error?.message || 'Failed to initialize booking.');
@@ -213,28 +220,38 @@ export default function HomePage() {
       fetchDashboardData(true);
     } catch (err: any) {
       triggerToast(err.message || 'Failed to check-in.', 'error');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   // Handle Active Booking Check-In
   const handleCheckInBooking = async (bookingId: string) => {
+    if (isProcessing) return;
     try {
+      setIsProcessing(true);
       await api.post(`/api/bookings/${bookingId}/check-in`);
       triggerToast('Checked in successfully! Bay is occupied.', 'success');
       fetchDashboardData(true);
     } catch (err: any) {
       triggerToast(err.message || 'Failed to check-in.', 'error');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   // Handle Active Booking Check-Out
   const handleCheckOutBooking = async (bookingId: string) => {
+    if (isProcessing) return;
     try {
+      setIsProcessing(true);
       await api.post(`/api/bookings/${bookingId}/check-out`);
       triggerToast('Checked out successfully! Thank you for using SmartPark.', 'success');
       fetchDashboardData(true);
     } catch (err: any) {
       triggerToast(err.message || 'Failed to check-out.', 'error');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -382,6 +399,7 @@ export default function HomePage() {
                       <Button
                         variant="primary"
                         size="sm"
+                        disabled={isProcessing}
                         onClick={() => handleCheckOutBooking(activeBooking.id)}
                         className="w-full sm:w-auto text-[10px] uppercase font-mono tracking-wider"
                       >
@@ -424,6 +442,7 @@ export default function HomePage() {
                         <Button
                           variant="primary"
                           size="sm"
+                          disabled={isProcessing}
                           onClick={() => handleCheckInReservation(activeReservation.id)}
                           className="text-[10px] uppercase font-mono tracking-wider"
                         >
@@ -432,6 +451,7 @@ export default function HomePage() {
                         <Button
                           variant="secondary"
                           size="sm"
+                          disabled={isProcessing}
                           onClick={() => handleCancelReservation(activeReservation.id)}
                           className="text-[10px] uppercase font-mono tracking-wider border-occupied/30 hover:border-occupied text-occupied"
                         >
