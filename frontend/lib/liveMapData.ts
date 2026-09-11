@@ -23,7 +23,8 @@ export type SlotState =
   | 'LIMITED'
   | 'OCCUPIED'
   | 'SELECTED'
-  | 'RESERVED';
+  | 'RESERVED'
+  | 'DISABLED';
 
 export interface MapParkingSlot {
   /** Unique slot ID: "<facilityId>-<floorId>-<number>", e.g. "fac01-B1-03" */

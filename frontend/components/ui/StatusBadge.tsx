@@ -3,8 +3,16 @@ import * as React from 'react';
 /** Parking / facility availability status types */
 export type ParkingStatusType = 'AVAILABLE' | 'LIMITED' | 'OCCUPIED' | 'CLOSED' | 'RESERVED';
 
+export type StatusBadgeType =
+  | ParkingStatusType
+  | 'PENDING'
+  | 'CONFIRMED'
+  | 'CANCELLED'
+  | 'EXPIRED'
+  | 'COMPLETED';
+
 export interface StatusBadgeProps {
-  status: ParkingStatusType;
+  status: StatusBadgeType;
   /** Show the animated indicator dot */
   showDot?: boolean;
   className?: string;
@@ -18,7 +26,7 @@ interface StatusConfig {
   pulse: boolean;
 }
 
-const STATUS_CONFIGS: Record<ParkingStatusType, StatusConfig> = {
+const STATUS_CONFIGS: Record<StatusBadgeType, StatusConfig> = {
   AVAILABLE: {
     dot: 'bg-available',
     text: 'text-available',
@@ -54,6 +62,41 @@ const STATUS_CONFIGS: Record<ParkingStatusType, StatusConfig> = {
     label: 'Reserved',
     pulse: true,
   },
+  PENDING: {
+    dot: 'bg-limited',
+    text: 'text-limited',
+    container: 'bg-limited/10 border-limited/30',
+    label: 'Pending',
+    pulse: true,
+  },
+  CONFIRMED: {
+    dot: 'bg-available',
+    text: 'text-available',
+    container: 'bg-available/10 border-available/30',
+    label: 'Confirmed',
+    pulse: true,
+  },
+  CANCELLED: {
+    dot: 'bg-occupied',
+    text: 'text-occupied',
+    container: 'bg-occupied/10 border-occupied/30',
+    label: 'Cancelled',
+    pulse: false,
+  },
+  EXPIRED: {
+    dot: 'bg-smartTextSecondary',
+    text: 'text-smartTextSecondary',
+    container: 'bg-smartSurface border-smartBorder',
+    label: 'Expired',
+    pulse: false,
+  },
+  COMPLETED: {
+    dot: 'bg-aiBlue',
+    text: 'text-aiBlue',
+    container: 'bg-aiBlue/10 border-aiBlue/30',
+    label: 'Completed',
+    pulse: false,
+  },
 };
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({
@@ -61,7 +104,8 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   showDot = true,
   className = '',
 }) => {
-  const cfg = STATUS_CONFIGS[status];
+  // Safe fallback configuration to guard against undefined statuses at runtime
+  const cfg = STATUS_CONFIGS[status] || STATUS_CONFIGS.AVAILABLE;
 
   return (
     <span

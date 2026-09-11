@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "test": "ts-node src/tests/integration.test.ts",
     "build": "tsc --project tsconfig.json"
   },
   "prisma": {

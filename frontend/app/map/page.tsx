@@ -579,15 +579,15 @@ const FloorSlotGrid: React.FC<FloorSlotGridProps> = ({
       </div>
     </div>
 
-    {/* Slot grid */}
+    // Slot grid
     <div className="flex flex-wrap justify-center gap-3">
       {floor.slots.map((slot) => (
         <ParkingSlot
           key={slot.id}
-          id={slot.id.split('-').pop() ?? slot.id}
+          id={slot.id.includes('-') ? slot.id.split('-').pop()! : slot.id}
           state={getSlotDisplayState(slot, selectedSlotId)}
           onClick={
-            slot.state !== 'OCCUPIED' && slot.state !== 'RESERVED'
+            slot.state === 'AVAILABLE'
               ? () => onSlotClick(slot.id)
               : undefined
           }
@@ -683,22 +683,40 @@ export default function LiveMapPage() {
         const response = await fetch(`${BASE_URL}/api/facilities`);
         const json = await response.json();
         if (json.success && Array.isArray(json.data)) {
-          const mapped = json.data.map((f: any) => {
+          const mappedPromises = json.data.map(async (f: any) => {
             const template = MAP_FACILITIES.find(m => mapIdToBackend(m.id) === f.id) || MAP_FACILITIES[0];
             
+            let apiFloors: any[] = [];
+            let apiSlots: any[] = [];
+            try {
+              const detailRes = await fetch(`${BASE_URL}/api/facilities/${f.id}`);
+              const detailJson = await detailRes.json();
+              if (detailJson.success && detailJson.data) {
+                apiFloors = detailJson.data.floors || [];
+                apiSlots = detailJson.data.slots || [];
+              }
+            } catch (err) {
+              console.warn(`Failed to fetch detail for facility ${f.id}:`, err);
+            }
+
             const floors = template.floors.map(floorTemplate => {
-              const apiFloor = f.floors?.find((fl: any) => fl.level === floorTemplate.id) || {};
-              const slots = (apiFloor.slots || []).map((s: any) => ({
+              const matchedApiFloor = apiFloors.find((fl: any) => fl.level === floorTemplate.id || fl.name?.includes(floorTemplate.id)) || {};
+              const floorSlotsRaw = apiSlots.filter((s: any) => s.floorId === matchedApiFloor.id);
+              
+              const slots: MapParkingSlot[] = floorSlotsRaw.map((s: any) => ({
                 id: s.id,
                 state: s.status as SlotState,
-                isEV: s.isEVCharging
+                isEV: s.isEVCharging,
+                isDisabled: s.status === 'DISABLED'
               }));
+
               const availCount = slots.filter((s: any) => s.state === 'AVAILABLE').length;
 
               return {
                 ...floorTemplate,
                 slots: slots.length > 0 ? slots : floorTemplate.slots,
-                availableCount: slots.length > 0 ? availCount : floorTemplate.availableCount
+                availableCount: slots.length > 0 ? availCount : floorTemplate.availableCount,
+                totalCount: slots.length > 0 ? slots.length : floorTemplate.totalCount
               };
             });
 
@@ -708,10 +726,12 @@ export default function LiveMapPage() {
               name: f.name,
               availableBays: f.availableSlots,
               totalBays: f.totalCapacity,
-              status: f.availableSlots > 0 ? 'AVAILABLE' : 'LIMITED',
+              status: f.availableSlots > 0 ? (f.availableSlots > 5 ? 'AVAILABLE' : 'LIMITED') : 'OCCUPIED',
               floors
             };
           });
+
+          const mapped = await Promise.all(mappedPromises);
           setFacilitiesList(mapped);
         }
       } catch (err) {
@@ -721,7 +741,6 @@ export default function LiveMapPage() {
     load();
 
     // Setup SSE connection for real-time facility slot status updates
-    // In horizontal scale this event emitter would hook up to redis pub/sub
     let eventSource: EventSource | null = null;
     try {
       eventSource = new EventSource(`${BASE_URL}/api/realtime/facilities/all`);

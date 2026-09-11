@@ -94,6 +94,20 @@ export default function ProfilePage() {
       setLoadingVehicles(true);
       setLoadingBookings(true);
 
+      // Load user profile details from /api/auth/me
+      try {
+        const meRes = await api.get('/api/auth/me');
+        if (meRes.success && meRes.data?.user) {
+          setProfile(prev => ({
+            ...prev,
+            name: meRes.data.user.name || meRes.data.user.email.split('@')[0],
+            email: meRes.data.user.email
+          }));
+        }
+      } catch (meErr) {
+        console.warn('Failed to load /me profile data:', meErr);
+      }
+
       // Load vehicles
       const vRes = await api.get('/api/vehicles');
       if (vRes.success && Array.isArray(vRes.data)) {

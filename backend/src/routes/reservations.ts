@@ -140,10 +140,22 @@ export async function reservationRoutes(fastify: FastifyInstance, options: Fasti
           },
           include: {
             facility: true,
-            slot: true,
+            slot: {
+              include: {
+                floor: true
+              }
+            },
             vehicle: true
           }
         });
+
+        // Reserve slot if currently AVAILABLE
+        if (slot.status === 'AVAILABLE') {
+          await tx.parkingSlot.update({
+            where: { id: slotId },
+            data: { status: 'RESERVED' }
+          });
+        }
 
         await tx.notification.create({
           data: {
@@ -403,7 +415,11 @@ export async function reservationRoutes(fastify: FastifyInstance, options: Fasti
           },
           include: {
             facility: true,
-            slot: true,
+            slot: {
+              include: {
+                floor: true
+              }
+            },
             vehicle: true
           }
         });
@@ -437,70 +453,149 @@ export async function reservationRoutes(fastify: FastifyInstance, options: Fasti
     }
   });
 
+  // Shared Cancellation Logic Helper
+  const processReservationCancel = async (id: string, userId: string) => {
+    const reservation = await prisma.reservation.findUnique({
+      where: { id },
+      include: {
+        facility: true,
+        slot: {
+          include: {
+            floor: true
+          }
+        },
+        bookings: true
+      }
+    });
+
+    if (!reservation) {
+      return { status: 404, error: { code: 'NOT_FOUND', message: 'Reservation not found.' } };
+    }
+
+    if (reservation.userId !== userId) {
+      return { status: 403, error: { code: 'FORBIDDEN', message: 'You do not have permission to cancel this reservation.' } };
+    }
+
+    if (reservation.status === ReservationStatus.CANCELLED) {
+      return { status: 400, error: { code: 'BAD_REQUEST', message: 'Reservation is already cancelled.' } };
+    }
+
+    if (reservation.status === ReservationStatus.COMPLETED) {
+      return { status: 400, error: { code: 'BAD_REQUEST', message: 'Cannot cancel a completed reservation.' } };
+    }
+
+    // Check linked active bookings for check-in status
+    const activeBookings = reservation.bookings.filter(b => b.status === 'ACTIVE');
+    const checkedInBooking = activeBookings.find(b => b.entryTime !== null);
+
+    if (checkedInBooking) {
+      return { status: 400, error: { code: 'BAD_REQUEST', message: 'Cannot cancel reservation after check-in has occurred.' } };
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Update reservation status to CANCELLED
+      const updated = await tx.reservation.update({
+        where: { id },
+        data: { status: ReservationStatus.CANCELLED },
+        include: {
+          facility: true,
+          slot: {
+            include: {
+              floor: true
+            }
+          },
+          vehicle: true
+        }
+      });
+
+      // 2. Cancel all linked active (not checked-in) bookings
+      if (activeBookings.length > 0) {
+        await tx.booking.updateMany({
+          where: {
+            reservationId: id,
+            status: 'ACTIVE'
+          },
+          data: { status: 'CANCELLED' }
+        });
+      }
+
+      // 3. Release parking slot status if currently RESERVED
+      if (reservation.slot.status === 'RESERVED') {
+        await tx.parkingSlot.update({
+          where: { id: reservation.slotId },
+          data: { status: 'AVAILABLE' }
+        });
+      }
+
+      // 4. Create user notification
+      await tx.notification.create({
+        data: {
+          userId,
+          type: NotificationType.BOOKING,
+          priority: NotificationPriority.IMPORTANT,
+          title: 'Reservation cancelled',
+          message: `Your reservation at ${reservation.facility.name} (Slot ${reservation.slot.slotNumber}) has been cancelled.`
+        }
+      });
+
+      return { updated, activeBookings };
+    });
+
+    // Emit realtime SSE events
+    emitReservationUpdate(reservation.facilityId, result.updated.id, result.updated.status, reservation.slotId);
+    for (const b of result.activeBookings) {
+      const { emitBookingUpdate } = await import('../utils/events');
+      emitBookingUpdate(reservation.facilityId, b.id, 'CANCELLED', reservation.slotId, reservation.id);
+    }
+    emitAvailabilityUpdate(reservation.facilityId);
+
+    return { status: 200, data: result.updated };
+  };
+
   // DELETE /api/reservations/:id (Cancel reservation)
   fastify.delete('/:id', async (request, reply) => {
     try {
       const userId = request.user!.id;
       const { id } = request.params as { id: string };
 
-      const reservation = await prisma.reservation.findUnique({
-        where: { id },
-        include: { facility: true, slot: true }
-      });
-
-      if (!reservation) {
-        return reply.status(404).send({
+      const outcome = await processReservationCancel(id, userId);
+      if (outcome.error) {
+        return reply.status(outcome.status).send({
           success: false,
-          error: { code: 'NOT_FOUND', message: 'Reservation not found.' }
+          error: outcome.error
         });
       }
-
-      if (reservation.userId !== userId) {
-        return reply.status(403).send({
-          success: false,
-          error: { code: 'FORBIDDEN', message: 'You do not have permission to cancel this reservation.' }
-        });
-      }
-
-      if (reservation.status === ReservationStatus.CANCELLED) {
-        return reply.status(400).send({
-          success: false,
-          error: { code: 'BAD_REQUEST', message: 'Reservation is already cancelled.' }
-        });
-      }
-
-      if (reservation.status === ReservationStatus.COMPLETED) {
-        return reply.status(400).send({
-          success: false,
-          error: { code: 'BAD_REQUEST', message: 'Cannot cancel a completed reservation.' }
-        });
-      }
-
-      const result = await prisma.$transaction(async (tx) => {
-        const updated = await tx.reservation.update({
-          where: { id },
-          data: { status: ReservationStatus.CANCELLED }
-        });
-
-        await tx.notification.create({
-          data: {
-            userId,
-            type: NotificationType.BOOKING,
-            priority: NotificationPriority.IMPORTANT,
-            title: 'Reservation cancelled',
-            message: `Your reservation at ${reservation.facility.name} (Slot ${reservation.slot.slotNumber}) has been cancelled.`
-          }
-        });
-
-        return updated;
-      });
-
-      emitReservationUpdate(reservation.facilityId, result.id, result.status, reservation.slotId);
-      emitAvailabilityUpdate(reservation.facilityId);
 
       return reply.send({
         success: true,
-        data: result
+        data: outcome.data
+      });
+    } catch (error: any) {
+      fastify.log.error(error);
+      return reply.status(500).send({
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'An internal error occurred.' }
+      });
+    }
+  });
+
+  // POST /api/reservations/:id/cancel (Cancel reservation - POST method support)
+  fastify.post('/:id/cancel', async (request, reply) => {
+    try {
+      const userId = request.user!.id;
+      const { id } = request.params as { id: string };
+
+      const outcome = await processReservationCancel(id, userId);
+      if (outcome.error) {
+        return reply.status(outcome.status).send({
+          success: false,
+          error: outcome.error
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: outcome.data
       });
     } catch (error: any) {
       fastify.log.error(error);
@@ -511,3 +606,4 @@ export async function reservationRoutes(fastify: FastifyInstance, options: Fasti
     }
   });
 }
+

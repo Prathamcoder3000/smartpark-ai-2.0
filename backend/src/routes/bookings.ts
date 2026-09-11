@@ -372,7 +372,15 @@ export async function bookingRoutes(fastify: FastifyInstance, options: FastifyPl
         const updated = await tx.booking.update({
           where: { id },
           data: { status: BookingStatus.CANCELLED },
-          include: { facility: true, slot: true }
+          include: {
+            facility: true,
+            slot: {
+              include: {
+                floor: true
+              }
+            },
+            reservation: true
+          }
         });
 
         await tx.notification.create({
@@ -389,6 +397,10 @@ export async function bookingRoutes(fastify: FastifyInstance, options: FastifyPl
       });
 
       emitBookingUpdate(result.facilityId, result.id, result.status, result.slotId, result.reservationId || undefined);
+      if (result.reservationId) {
+        const { emitReservationUpdate } = await import('../utils/events');
+        emitReservationUpdate(result.facilityId, result.reservationId, 'CANCELLED', result.slotId);
+      }
       emitAvailabilityUpdate(result.facilityId);
 
       return reply.send({

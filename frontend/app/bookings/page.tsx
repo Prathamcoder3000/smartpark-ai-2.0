@@ -88,9 +88,9 @@ export default function BookingsPage() {
       startTime: startTimeStr,
       endTime: endTimeStr,
       slotNumber: b.slot?.slotNumber || 'A-101',
-      floor: b.slot?.floor?.name || 'Level 1',
+      floor: b.slot?.floor?.name || 'Main Level',
       vehicle: b.reservation?.vehicle 
-        ? `${b.reservation.vehicle.licensePlate} (${b.reservation.vehicle.make} ${b.reservation.vehicle.model})`
+        ? `${b.reservation.vehicle.licensePlate}${b.reservation.vehicle.make || b.reservation.vehicle.model ? ` (${b.reservation.vehicle.make || ''} ${b.reservation.vehicle.model || ''})` : ''}`
         : 'No vehicle associated',
       amount: b.finalAmount || b.reservation?.price || 5.00,
       bookingStatus,
@@ -102,12 +102,70 @@ export default function BookingsPage() {
     };
   };
 
+  const mapReservationToFrontend = (r: any): Booking => {
+    let bookingStatus: BookingStatus = 'UPCOMING';
+    if (r.status === 'CANCELLED') {
+      bookingStatus = 'CANCELLED';
+    } else if (r.status === 'COMPLETED' || r.status === 'EXPIRED') {
+      bookingStatus = 'COMPLETED';
+    }
+
+    const startD = new Date(r.startTime);
+    const endD = new Date(r.endTime);
+
+    const dateStr = startD.toISOString().split('T')[0];
+    const startTimeStr = startD.toTimeString().split(' ')[0].substring(0, 5);
+    const endTimeStr = endD.toTimeString().split(' ')[0].substring(0, 5);
+
+    return {
+      id: r.id,
+      facilityName: r.facility?.name || 'SmartPark Facility',
+      facilityAddress: r.facility?.address || 'Near Downtown',
+      date: dateStr,
+      startTime: startTimeStr,
+      endTime: endTimeStr,
+      slotNumber: r.slot?.slotNumber || 'A-101',
+      floor: r.slot?.floor?.name || 'Main Level',
+      vehicle: r.vehicle 
+        ? `${r.vehicle.licensePlate}${r.vehicle.make || r.vehicle.model ? ` (${r.vehicle.make || ''} ${r.vehicle.model || ''})` : ''}`
+        : 'No vehicle associated',
+      amount: r.price || 5.00,
+      bookingStatus,
+      bookingReference: r.id.substring(0, 8).toUpperCase(),
+      distanceKm: 0.5,
+      walkMinutes: 5,
+      amenities: r.slot?.isEVCharging ? ['EV Fast Charger', 'CCTV 24/7', 'Covered Deck'] : ['CCTV 24/7', 'Covered Deck'],
+      createdDate: new Date(r.createdAt).toLocaleString(),
+      isReservationOnly: true
+    };
+  };
+
   const loadBookings = React.useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const res = await api.get('/api/bookings');
-      if (res.success && Array.isArray(res.data)) {
-        setBookings(res.data.map(mapBookingToFrontend));
+      const [bookingsRes, reservationsRes] = await Promise.all([
+        api.get('/api/bookings'),
+        api.get('/api/reservations')
+      ]);
+
+      if (bookingsRes.success && reservationsRes.success) {
+        const bookingsMapped = bookingsRes.data.map(mapBookingToFrontend);
+        const bookingReservationIds = new Set(
+          bookingsRes.data.map((b: any) => b.reservationId).filter(Boolean)
+        );
+
+        // Filter out reservations that have already been converted to bookings
+        const unconvertedReservations = reservationsRes.data.filter(
+          (r: any) => !bookingReservationIds.has(r.id)
+        );
+        const reservationsMapped = unconvertedReservations.map(mapReservationToFrontend);
+
+        // Combine both lists, ordering by creation date / start date
+        const combined = [...bookingsMapped, ...reservationsMapped].sort(
+          (a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime()
+        );
+
+        setBookings(combined);
       }
     } catch (err: any) {
       console.error(err);
@@ -190,9 +248,18 @@ export default function BookingsPage() {
   const handleCancelBooking = async () => {
     if (!bookingToCancel) return;
     try {
-      const res = await api.post(`/api/bookings/${bookingToCancel.id}/cancel`);
+      let res;
+      if (bookingToCancel.isReservationOnly) {
+        res = await api.delete(`/api/reservations/${bookingToCancel.id}`);
+      } else {
+        res = await api.post(`/api/bookings/${bookingToCancel.id}/cancel`);
+      }
+
       if (res.success) {
-        showToast(`Booking ${bookingToCancel.bookingReference} cancelled successfully.`, 'success');
+        showToast(
+          `${bookingToCancel.isReservationOnly ? 'Reservation' : 'Booking'} ${bookingToCancel.bookingReference} cancelled successfully.`,
+          'success'
+        );
         setBookingToCancel(null);
         await loadBookings(true);
       }

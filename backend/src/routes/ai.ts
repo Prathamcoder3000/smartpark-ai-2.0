@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { prisma } from '../utils/db';
+import { verifyToken } from '../plugins/auth';
 
 const AI_ENGINE_URL = process.env.AI_ENGINE_URL ?? 'http://127.0.0.1:8002';
 
@@ -57,17 +58,19 @@ export async function aiRoutes(fastify: FastifyInstance, options: FastifyPluginO
         
         // Graceful fallback prediction logic
         const fallbackOcc = Math.round(actualOccupancy * 100);
+        const confidence = historicalCount > 20 ? 0.90 : 0.75;
         return reply.send({
           success: true,
           data: {
             prediction: {
               occupancy: fallbackOcc,
-              confidence: 0.50
+              confidence,
+              forecastStatus: fallbackOcc > 80 ? 'Filling fast' : (fallbackOcc < 40 ? 'High availability' : 'Moderate filling')
             },
             recommendation: fallbackOcc > 80 ? 'BUSY_PERIOD' : 'GOOD_TIME',
             reasoning: [
               "Rule-based fallback calculation used (AI engine offline).",
-              "Occupancy estimated from current physical database status."
+              `Occupancy (${fallbackOcc}%) estimated from current physical database status.`
             ]
           }
         });
@@ -85,21 +88,66 @@ export async function aiRoutes(fastify: FastifyInstance, options: FastifyPluginO
   fastify.post('/recommend', {
     config: {
       rateLimit: {
-        max: Number(process.env.RATE_LIMIT_RECOMMEND_MAX ?? 20),
+        max: Number(process.env.RATE_LIMIT_RECOMMEND_MAX ?? 50),
         timeWindow: '1 minute'
       }
     }
   }, async (request, reply) => {
     try {
       const body = request.body as any;
-      const { preferences } = body || {};
+      const { preferences, vehicleId } = body || {};
+
+      // Auto-detect EV preference from authenticated user's vehicles if available
+      let evCompatible = preferences?.evCompatible ?? false;
+      
+      // If authorization token exists or vehicleId is passed, check vehicle EV status
+      let authUserId: string | null = null;
+      try {
+        const authHeader = request.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          const token = authHeader.substring(7);
+          const decoded = verifyToken(token);
+          authUserId = decoded?.sub || null;
+        }
+      } catch {
+        // Ignore auth error for public recommendation query
+      }
+
+      if (vehicleId && authUserId) {
+        const vehicle = await prisma.vehicle.findFirst({
+          where: { id: vehicleId, userId: authUserId }
+        });
+        if (vehicle?.isEV) {
+          evCompatible = true;
+        }
+      } else if (authUserId && !preferences?.evCompatible) {
+        const userVehicles = await prisma.vehicle.findMany({
+          where: { userId: authUserId }
+        });
+        if (userVehicles.some(v => v.isEV)) {
+          evCompatible = true;
+        }
+      }
+
+      const mergedPreferences = {
+        ...preferences,
+        evCompatible
+      };
 
       // 1. Fetch facilities from DB
       const facilities = await prisma.parkingFacility.findMany({
         include: { slots: true }
       });
 
-      // Simple mock distance mappings for prototype recommendations
+      if (!facilities || facilities.length === 0) {
+        return reply.send({
+          success: true,
+          engine: "Rule-Based Parking Intelligence",
+          recommendations: []
+        });
+      }
+
+      // Distance & Pricing mappings for prototype facilities
       const distanceMapping: Record<string, number> = {
         'facility-metro-central': 2,
         'facility-cyber-city': 5,
@@ -107,12 +155,19 @@ export async function aiRoutes(fastify: FastifyInstance, options: FastifyPluginO
         'facility-financial-plaza': 3
       };
 
+      const priceMapping: Record<string, number> = {
+        'facility-metro-central': 60,
+        'facility-cyber-city': 50,
+        'facility-techpark': 40,
+        'facility-financial-plaza': 75
+      };
+
       const facilityOptions = facilities.map(f => {
         const capacity = f.slots.length;
         const available = f.slots.filter(s => s.status === 'AVAILABLE').length;
         const evReady = f.slots.some(s => s.isEVCharging && s.status === 'AVAILABLE');
-        const price = 5.00; // Flat pricing rate for prototype
-        const distance = distanceMapping[f.id] ?? 6;
+        const price = priceMapping[f.id] ?? 50;
+        const distance = distanceMapping[f.id] ?? 5;
 
         return {
           id: f.id,
@@ -122,7 +177,9 @@ export async function aiRoutes(fastify: FastifyInstance, options: FastifyPluginO
           totalCapacity: capacity,
           price,
           distanceMinutes: distance,
-          isEVChargingReady: evReady
+          isEVChargingReady: evReady,
+          isCovered: true,
+          hasSecurity: true
         };
       });
 
@@ -132,7 +189,7 @@ export async function aiRoutes(fastify: FastifyInstance, options: FastifyPluginO
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             facilities: facilityOptions,
-            preferences
+            preferences: mergedPreferences
           })
         });
 
@@ -145,28 +202,59 @@ export async function aiRoutes(fastify: FastifyInstance, options: FastifyPluginO
       } catch (err) {
         fastify.log.warn(`AI Engine unreachable at ${AI_ENGINE_URL}. Using fallback recommender.`);
 
-        // Fallback recommender score logic: sort simply by availability descending
-        const recommendations = facilityOptions.map(f => {
-          const availRatio = f.availableSlots / f.totalCapacity;
-          const matchScore = Math.round(availRatio * 100 * 10) / 10;
-          return {
-            facility: {
-              id: f.id,
-              name: f.name,
-              address: f.address
-            },
-            matchScore,
-            estimatedWalkingTime: f.distanceMinutes,
-            estimatedPrice: f.price,
-            reasoning: [
-              "Fallback recommendation calculation (AI engine offline).",
-              "Ranked strictly based on current available slots."
-            ]
-          };
-        }).sort((a, b) => b.matchScore - a.matchScore);
+        // Fallback recommender score logic with exact scoring formula
+        const recommendations = facilityOptions
+          .filter(f => {
+            if (mergedPreferences?.evOnly && !f.isEVChargingReady) return false;
+            if (mergedPreferences?.maxPrice && mergedPreferences.maxPrice > 0 && f.price > mergedPreferences.maxPrice) return false;
+            if (mergedPreferences?.maxWalkingDistanceMin && mergedPreferences.maxWalkingDistanceMin > 0 && f.distanceMinutes > mergedPreferences.maxWalkingDistanceMin) return false;
+            return true;
+          })
+          .map(f => {
+            const availRatio = f.totalCapacity > 0 ? f.availableSlots / f.totalCapacity : 0;
+            const availScore = availRatio * 100;
+            const distScore = Math.max(0, 100 - f.distanceMinutes * 6.67);
+            const evScore = mergedPreferences?.evCompatible ? (f.isEVChargingReady ? 100 : 20) : 100;
+            const priceScore = Math.max(0, 100 - f.price * 1.5);
+            
+            const matchScore = Math.round(((availScore * 0.40) + (distScore * 0.25) + (evScore * 0.20) + (priceScore * 0.15)) * 10) / 10;
+            const confidenceValue = roundNum(Math.min(0.98, Math.max(0.70, 0.80 + (availRatio * 0.15))), 3);
+            const confidencePct = `${Math.round(confidenceValue * 1000) / 10}%`;
+
+            const reasoning = [
+              `High slot availability (${f.availableSlots} open, ${Math.round(availRatio * 100)}% available).`,
+              `Short ${f.distanceMinutes} min walk to destination.`
+            ];
+            if (mergedPreferences?.evCompatible && f.isEVChargingReady) {
+              reasoning.push("Matches EV charging criteria.");
+            }
+
+            return {
+              facility: {
+                id: f.id,
+                name: f.name,
+                address: f.address
+              },
+              matchScore,
+              confidence: confidenceValue,
+              confidenceScore: confidencePct,
+              estimatedWalkingTime: f.distanceMinutes,
+              estimatedPrice: f.price,
+              availableSlots: f.availableSlots,
+              totalCapacity: f.totalCapacity,
+              isEVChargingReady: f.isEVChargingReady,
+              forecastStatus: availRatio >= 0.4 ? 'Good availability' : 'Moderate filling',
+              reasoning: [
+                `Slot availability: ${f.availableSlots} of ${f.totalCapacity} slots open (${Math.round(availRatio * 100)}%).`,
+                `Proximity: ${f.distanceMinutes} min walking distance.`,
+                f.isEVChargingReady ? "EV fast charging stations available." : "Standard parking bays available."
+              ]
+            };
+          }).sort((a, b) => b.matchScore - a.matchScore);
 
         return reply.send({
           success: true,
+          engine: "Rule-Based Parking Intelligence (Fallback)",
           recommendations
         });
       }
@@ -179,3 +267,9 @@ export async function aiRoutes(fastify: FastifyInstance, options: FastifyPluginO
     }
   });
 }
+
+function roundNum(val: number, decimals: number): number {
+  const factor = Math.pow(10, decimals);
+  return Math.round(val * factor) / factor;
+}
+

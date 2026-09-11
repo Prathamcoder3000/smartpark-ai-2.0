@@ -75,17 +75,26 @@ export async function telemetryRoutes(fastify: FastifyInstance, options: Fastify
           }
         });
 
-        // Update slot state (excluding DISABLED)
+        // Update slot state (excluding DISABLED and RESERVED slots, and preserving ACTIVE bookings)
         if (slotId) {
           const slot = await tx.parkingSlot.findUnique({
             where: { id: slotId }
           });
 
-          if (slot && slot.status !== ParkingSlotStatus.DISABLED) {
+          if (slot && slot.status !== ParkingSlotStatus.DISABLED && slot.status !== ParkingSlotStatus.RESERVED) {
             const targetStatus = occupancy ? ParkingSlotStatus.OCCUPIED : ParkingSlotStatus.AVAILABLE;
             if (slot.status !== targetStatus) {
-              if (slot.status === ParkingSlotStatus.RESERVED && targetStatus === ParkingSlotStatus.AVAILABLE) {
-                // Do not clear reserved state from telemetry sensor report
+              if (slot.status === ParkingSlotStatus.OCCUPIED && targetStatus === ParkingSlotStatus.AVAILABLE) {
+                // Check if an active checked-in booking exists on this slot
+                const activeBooking = await tx.booking.findFirst({
+                  where: { slotId, status: 'ACTIVE' }
+                });
+                if (!activeBooking) {
+                  await tx.parkingSlot.update({
+                    where: { id: slotId },
+                    data: { status: targetStatus }
+                  });
+                }
               } else {
                 await tx.parkingSlot.update({
                   where: { id: slotId },
@@ -164,11 +173,19 @@ export async function telemetryRoutes(fastify: FastifyInstance, options: Fastify
               where: { id: slotId }
             });
 
-            if (slot && slot.status !== ParkingSlotStatus.DISABLED) {
+            if (slot && slot.status !== ParkingSlotStatus.DISABLED && slot.status !== ParkingSlotStatus.RESERVED) {
               const targetStatus = occupancy ? ParkingSlotStatus.OCCUPIED : ParkingSlotStatus.AVAILABLE;
               if (slot.status !== targetStatus) {
-                if (slot.status === ParkingSlotStatus.RESERVED && targetStatus === ParkingSlotStatus.AVAILABLE) {
-                  // Do not clear reserved state from telemetry sensor report
+                if (slot.status === ParkingSlotStatus.OCCUPIED && targetStatus === ParkingSlotStatus.AVAILABLE) {
+                  const activeBooking = await tx.booking.findFirst({
+                    where: { slotId, status: 'ACTIVE' }
+                  });
+                  if (!activeBooking) {
+                    await tx.parkingSlot.update({
+                      where: { id: slotId },
+                      data: { status: targetStatus }
+                    });
+                  }
                 } else {
                   await tx.parkingSlot.update({
                     where: { id: slotId },

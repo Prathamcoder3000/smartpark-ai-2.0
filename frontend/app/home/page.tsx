@@ -72,7 +72,7 @@ interface Reservation {
   slot: {
     slotNumber: string;
     floor: {
-      label: string;
+      name: string;
     };
   };
   vehicle?: Vehicle;
@@ -96,7 +96,7 @@ interface Booking {
   slot: {
     slotNumber: string;
     floor: {
-      label: string;
+      name: string;
     };
   };
   reservation?: {
@@ -330,7 +330,7 @@ export default function HomePage() {
               {[
                 { label: 'REGION OPEN BAYS', val: `${totalSlotsAvailable} spots`, sub: `${avgOccupancy}% regional load`, color: 'text-available' },
                 { label: 'MY VEHICLES', val: `${vehicles.length} active`, sub: `${vehicles.filter(v => v.isEV).length} EV registered`, color: 'text-white' },
-                { label: 'PENDING RESERVES', val: `${reservations.filter(r => r.status === 'CONFIRMED').length}`, sub: 'Ready for check-in', color: 'text-signature' },
+                { label: 'PENDING RESERVES', val: `${reservations.filter(r => r.status === 'CONFIRMED' && new Date(r.endTime) > new Date()).length}`, sub: 'Ready for check-in', color: 'text-signature' },
                 { label: 'ACTIVE CHECK-INS', val: activeBooking ? '1 Spot' : '0 Spots', sub: activeBooking ? activeBooking.slot.slotNumber : 'No check-in active', color: 'text-aiBlue' }
               ].map((kpi, idx) => (
                 <Card key={idx} variant="elevated" className="p-4 space-y-1">
@@ -365,7 +365,7 @@ export default function HomePage() {
                       </div>
                       <div>
                         <span className="text-smartTextSecondary text-[9px] block">ASSIGNED BAY</span>
-                        <span className="text-signature block font-bold mt-0.5">{`${activeBooking.slot.floor.label} • Slot ${activeBooking.slot.slotNumber}`}</span>
+                        <span className="text-signature block font-bold mt-0.5">{`${activeBooking.slot.floor?.name ? `${activeBooking.slot.floor.name} • ` : ''}Slot ${activeBooking.slot.slotNumber}`}</span>
                       </div>
                       <div>
                         <span className="text-smartTextSecondary text-[9px] block">CHECK-IN TIME</span>
@@ -409,7 +409,7 @@ export default function HomePage() {
                       </div>
                       <div>
                         <span className="text-smartTextSecondary text-[9px] block">RESERVED BAY</span>
-                        <span className="text-signature block font-bold mt-0.5">{`${activeReservation.slot.floor.label} • Slot ${activeReservation.slot.slotNumber}`}</span>
+                        <span className="text-signature block font-bold mt-0.5">{`${activeReservation.slot.floor?.name ? `${activeReservation.slot.floor.name} • ` : ''}Slot ${activeReservation.slot.slotNumber}`}</span>
                       </div>
                       <div>
                         <span className="text-smartTextSecondary text-[9px] block">RESERV TIMES</span>

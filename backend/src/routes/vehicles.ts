@@ -239,6 +239,26 @@ export async function vehicleRoutes(fastify: FastifyInstance, options: FastifyPl
         });
       }
 
+      // Active or upcoming reservation deletion protection
+      const activeReservation = await prisma.reservation.findFirst({
+        where: {
+          vehicleId: id,
+          status: {
+            in: ['CONFIRMED', 'PENDING']
+          }
+        }
+      });
+
+      if (activeReservation) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'BAD_REQUEST',
+            message: 'Cannot delete a vehicle with active or upcoming reservations. Please complete or cancel the reservation first.'
+          }
+        });
+      }
+
       await prisma.vehicle.delete({
         where: { id }
       });

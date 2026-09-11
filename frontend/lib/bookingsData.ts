@@ -17,6 +17,7 @@ export interface Booking {
   walkMinutes: number;
   amenities: string[];
   createdDate: string;
+  isReservationOnly?: boolean;
 }
 
 export const MOCK_BOOKINGS: Booking[] = [

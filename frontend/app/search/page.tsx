@@ -93,16 +93,52 @@ export default function SearchPage() {
   const [sortOption, setSortOption] = React.useState<SearchSort>('RECOMMENDED');
   const [facilitiesList, setFacilitiesList] = React.useState<SearchFacility[]>([]);
 
-  // Load facilities from backend API
+  // Load facilities from backend API & AI recommendation engine
   const loadFacilities = async () => {
     setIsLoading(true);
     setErrorMsg(null);
     try {
       const response = await fetch(`${BASE_URL}/api/facilities`);
       const json = await response.json();
+      
+      let aiRecommendationsMap: Record<string, any> = {};
+      let topRecommendedBackendId = '';
+
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('smartpark_token') : null;
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const aiResponse = await fetch(`${BASE_URL}/api/ai/recommend`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            preferences: {
+              evOnly: filters.evOnly,
+              coveredOnly: filters.coveredOnly,
+              securityOnly: filters.securityOnly,
+              maxPrice: filters.maxPrice,
+              maxWalkingDistanceMin: filters.maxDistance ? Math.round(filters.maxDistance * 10) : 0
+            }
+          })
+        });
+        const aiJson = await aiResponse.json();
+        if (aiJson.success && Array.isArray(aiJson.recommendations) && aiJson.recommendations.length > 0) {
+          topRecommendedBackendId = aiJson.recommendations[0].facility.id;
+          for (const item of aiJson.recommendations) {
+            aiRecommendationsMap[item.facility.id] = item;
+          }
+        }
+      } catch (aiErr) {
+        console.warn('AI engine query warning:', aiErr);
+      }
+
       if (json.success && Array.isArray(json.data)) {
         const mapped = json.data.map((f: any) => {
           const template = MOCK_SEARCH_FACILITIES.find(m => mapIdToBackend(m.id) === f.id) || MOCK_SEARCH_FACILITIES[0];
+          const aiItem = aiRecommendationsMap[f.id];
+          const isTopRec = f.id === topRecommendedBackendId || (!topRecommendedBackendId && template.isRecommended);
+
           return {
             ...template,
             id: mapIdToFrontend(f.id),
@@ -111,7 +147,10 @@ export default function SearchPage() {
             availableBays: f.availableSlots,
             totalBays: f.totalCapacity,
             occupancyPct: f.occupancyPercentage,
-            status: f.availableSlots > 0 ? 'AVAILABLE' : 'LIMITED'
+            status: f.availableSlots > 0 ? 'AVAILABLE' : 'LIMITED',
+            isRecommended: isTopRec,
+            confidenceScore: aiItem?.confidenceScore || template.confidenceScore || '96.4%',
+            recommendationReasons: aiItem?.reasoning || template.recommendationReasons
           };
         });
         setFacilitiesList(mapped);
@@ -129,7 +168,7 @@ export default function SearchPage() {
 
   React.useEffect(() => {
     loadFacilities();
-  }, []);
+  }, [filters.evOnly, filters.coveredOnly, filters.securityOnly, filters.maxPrice, filters.maxDistance]);
 
   // Trigger search handler
   const triggerSearch = (queryText: string) => {

@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { motion } from 'framer-motion';
 
-export type ParkingSlotState = 'AVAILABLE' | 'LIMITED' | 'OCCUPIED' | 'SELECTED' | 'RESERVED';
+export type ParkingSlotState = 'AVAILABLE' | 'LIMITED' | 'OCCUPIED' | 'SELECTED' | 'RESERVED' | 'DISABLED';
 
 export interface ParkingSlotProps {
   id: string;
@@ -54,9 +54,9 @@ export const ParkingSlot: React.FC<ParkingSlotProps> = ({
   onClick,
   className = '',
 }) => {
-  const isInteractive = !!onClick && state !== 'OCCUPIED' && state !== 'RESERVED';
+  const isInteractive = !!onClick && state !== 'OCCUPIED' && state !== 'RESERVED' && state !== 'DISABLED';
 
-  const stateConfigs = {
+  const stateConfigs: Record<ParkingSlotState, { borderColor: string; textColor: string; bg: string; label: string }> = {
     AVAILABLE: {
       borderColor: 'border-available/40',
       textColor: 'text-available',
@@ -87,15 +87,22 @@ export const ParkingSlot: React.FC<ParkingSlotProps> = ({
       bg: 'bg-aiBlue/10',
       label: 'Reserved',
     },
+    DISABLED: {
+      borderColor: 'border-smartBorder/20',
+      textColor: 'text-smartTextSecondary/30',
+      bg: 'bg-smartBg/20 opacity-40 cursor-not-allowed',
+      label: 'Disabled',
+    },
   };
 
-  const current = stateConfigs[state];
+  // Safe fallback configuration to guard against undefined states at runtime
+  const current = stateConfigs[state] || stateConfigs.AVAILABLE;
 
   return (
     <motion.button
       type="button"
       onClick={() => isInteractive && onClick && onClick(id)}
-      disabled={state === 'OCCUPIED' || state === 'RESERVED'}
+      disabled={state === 'OCCUPIED' || state === 'RESERVED' || state === 'DISABLED'}
       whileHover={isInteractive ? { scale: 1.02 } : {}}
       whileTap={isInteractive ? { scale: 0.98 } : {}}
       className={`relative flex flex-col items-center justify-between py-2.5 h-28 w-16 border-x-2 border-dashed ${
@@ -127,6 +134,25 @@ export const ParkingSlot: React.FC<ParkingSlotProps> = ({
             <span className="h-2 w-2 rounded-full bg-aiBlue ring-4 ring-aiBlue/20 animate-pulse" />
             <span className="text-[7.5px] font-bold text-aiBlue uppercase tracking-widest font-sans">
               RESERVED
+            </span>
+          </div>
+        ) : state === 'DISABLED' ? (
+          <div className="flex flex-col items-center gap-1.5 animate-fade-in opacity-50">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4 text-smartTextSecondary"
+            >
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            <span className="text-[7.5px] font-bold text-smartTextSecondary uppercase tracking-widest font-sans">
+              LOCKED
             </span>
           </div>
         ) : (
