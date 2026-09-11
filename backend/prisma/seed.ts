@@ -6,10 +6,10 @@ const facilitiesData = [
   {
     id: 'facility-metro-central',
     name: 'Metro Central Garage',
-    address: '101 Metro Boulevard, Downtown',
-    latitude: 40.7128,
-    longitude: -74.0060,
-    description: 'Multi-level garage in the heart of downtown with integrated EV charging and security patrols.',
+    address: '101 Nariman Point Boulevard, Fort, Mumbai 400021',
+    latitude: 18.9256,
+    longitude: 72.8242,
+    description: 'Multi-level garage in South Mumbai (Fort / Nariman Point) with integrated EV charging and security patrols.',
     floors: [
       {
         id: 'floor-metro-0',
@@ -40,10 +40,10 @@ const facilitiesData = [
   {
     id: 'facility-cyber-city',
     name: 'Cyber City Hub',
-    address: '404 Cybernetic Way, Tech District',
-    latitude: 37.7749,
-    longitude: -122.4194,
-    description: 'Tech-forward parking facility with ultra-fast EV charging stations and automated space guidance.',
+    address: '404 BKC Avenue, Bandra East, Mumbai 400051',
+    latitude: 19.0657,
+    longitude: 72.8687,
+    description: 'Tech-forward parking facility in Bandra Kurla Complex (BKC) with ultra-fast EV charging stations and automated space guidance.',
     floors: [
       {
         id: 'floor-cyber-1',
@@ -74,10 +74,10 @@ const facilitiesData = [
   {
     id: 'facility-techpark',
     name: 'TechPark Parking',
-    address: '77 Innovation Drive, Silicon Suburbs',
-    latitude: 34.0522,
-    longitude: -118.2437,
-    description: 'Secure suburban parking deck optimized for tech commuters with full mobile integration.',
+    address: '77 MIDC Central Road, Andheri East, Mumbai 400093',
+    latitude: 19.1197,
+    longitude: 72.8697,
+    description: 'Secure commercial parking deck in Andheri East MIDC optimized for tech commuters with full mobile integration.',
     floors: [
       {
         id: 'floor-tech-b1',
@@ -108,10 +108,10 @@ const facilitiesData = [
   {
     id: 'facility-financial-plaza',
     name: 'Financial Plaza Deck',
-    address: '55 Wall Street, Financial District',
-    latitude: 40.7075,
-    longitude: -74.0112,
-    description: 'Corporate parking complex offering premium oversized spaces and 24/7 valet options.',
+    address: '55 Hiranandani Boulevard, Powai, Mumbai 400076',
+    latitude: 19.1176,
+    longitude: 72.9060,
+    description: 'Corporate parking complex in Powai Hiranandani offering premium oversized spaces and 24/7 valet options.',
     floors: [
       {
         id: 'floor-financial-1',

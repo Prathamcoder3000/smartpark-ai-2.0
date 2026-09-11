@@ -451,8 +451,8 @@ export const MOCK_FACILITY_DETAILS: FacilityDetails[] = [
     id: 'fac-04',
     slug: 'financial-plaza-deck',
     name: 'Financial Plaza Deck',
-    zone: 'Zone A - Financial District',
-    address: '102 Wall Street Avenue, Financial District, Mumbai',
+    zone: 'Zone A - Powai Hiranandani',
+    address: '55 Hiranandani Boulevard, Powai, Mumbai 400076',
     description: 'Open surface and multi-tier budget-friendly parking deck. Convenient access to major financial firms, with standard security and affordable pricing models.',
     status: 'AVAILABLE',
     totalBays: 100,
@@ -578,7 +578,7 @@ export const MOCK_REVIEWS_DATABASE: Record<string, FacilityReviewSummary> = {
     distribution: { 5: 90, 4: 40, 3: 14, 2: 8, 1: 2 },
     reviews: [
       { id: 'rev-8', author: 'Rohit D.', rating: 4, comment: 'Cheapest option by far in this area. Uncovered surface deck can get hot in afternoons, but secure.', timeAgo: '3 hours ago' },
-      { id: 'rev-9', author: 'Neha S.', rating: 5, comment: 'Great budget deck. Straightforward entry and exit, perfect if you work at Wall Street Towers.', timeAgo: 'Last week' }
+      { id: 'rev-9', author: 'Neha S.', rating: 5, comment: 'Great budget deck. Straightforward entry and exit, perfect if you work at Hiranandani Business Park.', timeAgo: 'Last week' }
     ]
   }
 };
