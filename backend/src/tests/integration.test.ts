@@ -1026,6 +1026,187 @@ async function runTests() {
     }
     console.log(' -> SENSITIVE FIELD EXCLUSION SUCCESS.');
 
+    // 20. OPERATOR AUTHENTICATION & AUTHORIZATION TESTS
+    console.log('[Test 20] Unauthenticated operator endpoint access check (should fail 401)...');
+    const unauthOpRes = await app.inject({
+      method: 'GET',
+      url: '/api/operator/dashboard'
+    });
+    if (unauthOpRes.statusCode !== 401) {
+      throw new Error(`Unauthenticated operator endpoint returned status ${unauthOpRes.statusCode} instead of 401.`);
+    }
+    console.log(' -> UNAUTHENTICATED OPERATOR GUARD SUCCESS.');
+
+    // 21. NORMAL AUTHENTICATED USER OPERATOR ACCESS CHECK (403 FORBIDDEN)
+    console.log('[Test 21] Non-operator user operator endpoint access check (should fail 403)...');
+    const normalUserOpRes = await app.inject({
+      method: 'GET',
+      url: '/api/operator/dashboard',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (normalUserOpRes.statusCode !== 403) {
+      throw new Error(`Non-operator user returned status ${normalUserOpRes.statusCode} instead of 403.`);
+    }
+    console.log(' -> NON-OPERATOR FORBIDDEN GUARD SUCCESS.');
+
+    // 22. OPERATOR SEEDING ENDPOINT TEST
+    console.log('[Test 22] Testing operator seeding endpoint...');
+    const opEmail = `operator-${Date.now()}@smartpark.ai`;
+    const opSignupRes = await app.inject({
+      method: 'POST',
+      url: '/api/auth/signup',
+      payload: { name: 'SmartPark Operator', email: opEmail, password: 'OperatorPassword123!' }
+    });
+    if (opSignupRes.statusCode !== 201) {
+      throw new Error(`Operator user signup failed: ${opSignupRes.body}`);
+    }
+    const opToken = JSON.parse(opSignupRes.body).data.token;
+    const opUserId = JSON.parse(opSignupRes.body).data.user.id;
+
+    const seedOpRes = await app.inject({
+      method: 'POST',
+      url: '/api/operator/seed-operator',
+      headers: {
+        Authorization: `Bearer ${opToken}`,
+        'x-admin-seed-secret': process.env.ADMIN_SEED_SECRET || 'smartpark-admin-secret-key'
+      },
+      payload: { name: 'SmartPark Operator', email: opEmail, adminSeedSecret: process.env.ADMIN_SEED_SECRET || 'smartpark-admin-secret-key' }
+    });
+    if (seedOpRes.statusCode !== 200 || !JSON.parse(seedOpRes.body).success) {
+      throw new Error(`Operator seeding failed: ${seedOpRes.body}`);
+    }
+    console.log(' -> OPERATOR SEEDING SUCCESS.');
+
+    // 23. AUTHORIZED OPERATOR DASHBOARD METRICS TEST
+    console.log('[Test 23] Authorized operator dashboard metrics check...');
+    const opDashRes = await app.inject({
+      method: 'GET',
+      url: '/api/operator/dashboard',
+      headers: { Authorization: `Bearer ${opToken}` }
+    });
+    const opDashData = JSON.parse(opDashRes.body);
+    if (opDashRes.statusCode !== 200 || !opDashData.success || opDashData.data.totalFacilities === undefined) {
+      throw new Error(`Authorized operator dashboard failed: ${opDashRes.body}`);
+    }
+    console.log(` -> OPERATOR DASHBOARD METRICS SUCCESS. Facilities: ${opDashData.data.totalFacilities}, Slots: ${opDashData.data.totalSlots}`);
+
+    // 24. AUTHORIZED FACILITY LIST & OCCUPANCY BREAKDOWN
+    console.log('[Test 24] Authorized facility list & occupancy breakdown check...');
+    const opFacsRes = await app.inject({
+      method: 'GET',
+      url: '/api/operator/facilities',
+      headers: { Authorization: `Bearer ${opToken}` }
+    });
+    const opFacsData = JSON.parse(opFacsRes.body);
+    if (opFacsRes.statusCode !== 200 || !opFacsData.success || !Array.isArray(opFacsData.data)) {
+      throw new Error(`Authorized facility list failed: ${opFacsRes.body}`);
+    }
+
+    const opOccRes = await app.inject({
+      method: 'GET',
+      url: `/api/operator/facilities/${facilityId}/occupancy`,
+      headers: { Authorization: `Bearer ${opToken}` }
+    });
+    const opOccData = JSON.parse(opOccRes.body);
+    if (opOccRes.statusCode !== 200 || !opOccData.success || opOccData.data.facilityId !== facilityId) {
+      throw new Error(`Facility occupancy breakdown failed: ${opOccRes.body}`);
+    }
+    console.log(' -> FACILITY LIST & OCCUPANCY BREAKDOWN SUCCESS.');
+
+    // 25. OPERATOR SLOT STATUS UPDATE & BUSINESS-RULE PROTECTION
+    console.log('[Test 25] Operator slot status update & business-rule protection check...');
+    const patchSlotRes = await app.inject({
+      method: 'PATCH',
+      url: `/api/operator/slots/${slotId}`,
+      headers: { Authorization: `Bearer ${opToken}` },
+      payload: { status: 'DISABLED' }
+    });
+    const patchSlotData = JSON.parse(patchSlotRes.body);
+    if (patchSlotRes.statusCode !== 200 || !patchSlotData.success || patchSlotData.data.status !== 'DISABLED') {
+      throw new Error(`Slot status patch to DISABLED failed: ${patchSlotRes.body}`);
+    }
+
+    // Revert slot back to AVAILABLE
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/operator/slots/${slotId}`,
+      headers: { Authorization: `Bearer ${opToken}` },
+      payload: { status: 'AVAILABLE' }
+    });
+    console.log(' -> OPERATOR SLOT STATUS UPDATE SUCCESS.');
+
+    // 26. FACILITY-SCOPED OPERATOR DATA ISOLATION TEST
+    console.log('[Test 26] Testing facility-scoped operator data isolation...');
+    const scopedOpEmail = `scopedOp-${Date.now()}@smartpark.ai`;
+    const scopedOpSignup = await app.inject({
+      method: 'POST',
+      url: '/api/auth/signup',
+      payload: { name: 'Scoped Operator', email: scopedOpEmail, password: 'ScopedPassword123!' }
+    });
+    const scopedOpToken = JSON.parse(scopedOpSignup.body).data.token;
+    const scopedOpUserId = JSON.parse(scopedOpSignup.body).data.user.id;
+
+    // Seed scoped operator assigned ONLY to facilityId
+    await app.inject({
+      method: 'POST',
+      url: '/api/operator/seed-operator',
+      headers: {
+        Authorization: `Bearer ${scopedOpToken}`,
+        'x-admin-seed-secret': process.env.ADMIN_SEED_SECRET || 'smartpark-admin-secret-key'
+      },
+      payload: {
+        name: 'Scoped Operator',
+        email: scopedOpEmail,
+        adminSeedSecret: process.env.ADMIN_SEED_SECRET || 'smartpark-admin-secret-key',
+        facilityIds: [facilityId]
+      }
+    });
+
+    // Scoped operator attempts to access unauthorized facility ('facility-cyber-city') -> 403
+    const unauthFacRes = await app.inject({
+      method: 'GET',
+      url: '/api/operator/facilities/facility-cyber-city/occupancy',
+      headers: { Authorization: `Bearer ${scopedOpToken}` }
+    });
+    if (unauthFacRes.statusCode !== 403) {
+      throw new Error(`Scoped operator unauthorized facility access returned status ${unauthFacRes.statusCode} instead of 403.`);
+    }
+    console.log(' -> FACILITY-SCOPED OPERATOR DATA ISOLATION SUCCESS.');
+
+    // Clean up scoped operator only
+    await prisma.operator.deleteMany({ where: { email: scopedOpEmail } });
+    await prisma.user.deleteMany({ where: { id: scopedOpUserId } });
+
+    // 27. OPERATOR TELEMETRY FEED TEST
+    console.log('[Test 27] Operator telemetry feed check...');
+    const opTelemRes = await app.inject({
+      method: 'GET',
+      url: `/api/operator/facilities/${facilityId}/telemetry`,
+      headers: { Authorization: `Bearer ${opToken}` }
+    });
+    const opTelemData = JSON.parse(opTelemRes.body);
+    if (opTelemRes.statusCode !== 200 || !opTelemData.success || !Array.isArray(opTelemData.data)) {
+      throw new Error(`Operator telemetry feed failed: ${opTelemRes.body}`);
+    }
+    console.log(' -> OPERATOR TELEMETRY FEED SUCCESS.');
+
+    // 28. OPERATOR ANALYTICS FEED TEST
+    console.log('[Test 28] Operator analytics feed check...');
+    const opAnalRes = await app.inject({
+      method: 'GET',
+      url: '/api/operator/analytics',
+      headers: { Authorization: `Bearer ${opToken}` }
+    });
+    const opAnalData = JSON.parse(opAnalRes.body);
+    if (opAnalRes.statusCode !== 200 || !opAnalData.success || opAnalData.data.overallOccupancyPct === undefined) {
+      throw new Error(`Operator analytics feed failed: ${opAnalRes.body}`);
+    }
+    console.log(' -> OPERATOR ANALYTICS FEED SUCCESS.');
+
+    // Clean up primary test operator
+    await prisma.operator.deleteMany({ where: { email: opEmail } });
+    await prisma.user.deleteMany({ where: { id: opUserId } });
+
     console.log('\n=== ALL INTEGRATION TESTS PASSED SUCCESSFULLY ===');
   } catch (error) {
     console.error('\n!!! TEST FAILURE !!!');
