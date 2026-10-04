@@ -218,11 +218,22 @@ export default function BookingsPage() {
   }, [bookings, activeFilter]);
 
   // Check In Handler
-  const handleCheckIn = async (bookingId: string) => {
+  const handleCheckIn = async (bookingOrReservationId: string, isReservationOnly?: boolean) => {
     if (isProcessing) return;
     try {
       setIsProcessing(true);
-      const res = await api.post(`/api/bookings/${bookingId}/check-in`);
+      let targetBookingId = bookingOrReservationId;
+
+      if (isReservationOnly) {
+        // If it's a reservation, create the booking record first
+        const createRes = await api.post('/api/bookings', { reservationId: bookingOrReservationId });
+        if (!createRes.success) {
+          throw new Error(createRes.error?.message || 'Failed to initialize booking session.');
+        }
+        targetBookingId = createRes.data.id;
+      }
+
+      const res = await api.post(`/api/bookings/${targetBookingId}/check-in`);
       if (res.success) {
         showToast('Successfully checked in! Physical gate opened.', 'success');
         await loadBookings(true);
@@ -406,7 +417,7 @@ export default function BookingsPage() {
                         variant="primary" 
                         size="sm" 
                         className="text-[10.5px] uppercase tracking-wider font-semibold bg-available hover:bg-available/85 text-black border-transparent"
-                        onClick={() => handleCheckIn(primaryPassBooking.id)}
+                        onClick={() => handleCheckIn(primaryPassBooking.id, primaryPassBooking.isReservationOnly)}
                       >
                         Check In Now
                       </Button>

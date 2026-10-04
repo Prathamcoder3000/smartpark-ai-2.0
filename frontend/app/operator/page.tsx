@@ -283,7 +283,7 @@ export default function OperatorPage() {
     );
   }
 
-  if (!dashboardMetrics || !mounted) {
+  if (isAuthorized === null || !mounted || !dashboardMetrics) {
     return (
       <div className="min-h-screen bg-smartBg flex items-center justify-center font-mono text-xs text-smartTextSecondary animate-pulse">
         Loading real-time operations console...

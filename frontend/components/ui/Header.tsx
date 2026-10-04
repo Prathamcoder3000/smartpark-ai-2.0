@@ -45,7 +45,7 @@ export const Header: React.FC = () => {
     }
   }, [pathname, fetchUnreadCount]);
 
-  const navItems = [
+  const authenticatedNavItems = [
     { label: 'Overview', href: '/home' },
     { label: 'Live Map', href: '/map', highlight: true },
     { label: 'Intelligence', href: '/intelligence' },
@@ -53,6 +53,17 @@ export const Header: React.FC = () => {
     { label: 'Operator', href: '/operator' },
     { label: 'Support', href: '/support' },
   ];
+
+  const publicNavItems = [
+    { label: 'Home', href: '/' },
+    { label: 'Live Map', href: '/map', highlight: true },
+    { label: 'Explore Search', href: '/search' },
+    { label: 'Support', href: '/support' },
+  ];
+
+  const navItems = mounted
+    ? (isAuthenticated ? authenticatedNavItems : publicNavItems)
+    : publicNavItems;
 
   return (
     <>
